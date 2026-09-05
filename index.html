@@ -9,149 +9,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Control de Tareo</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%93%EF%B8%8F%3C/text%3E%3C/svg%3E">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
-/* ==========================================================
-   MICROSOFT 365 / ENTRA ID + MICROSOFT GRAPH
-   ========================================================== */
-const M365_KEY = 'controlTareoM365Config_v1';
-let M365 = JSON.parse(localStorage.getItem(M365_KEY)||'null') || {
-  clientId:'', tenantId:'organizations', siteUrl:''
-};
-let msalApp = null;
-let graphToken = null;
-let graphSiteId = null;
-
-function guardarConfigM365(){
-  const clientId=(document.getElementById('cfg-client-id')?.value||'').trim();
-  const tenantId=(document.getElementById('cfg-tenant-id')?.value||'organizations').trim();
-  const siteUrl=(document.getElementById('cfg-site-url')?.value||'').trim();
-  const msg=document.getElementById('cfg-msg');
-  if(!/^[0-9a-fA-F-]{36}$/.test(clientId)){ msg.innerHTML='<div class="msg-box err">Client ID no válido.</div>'; return; }
-  if(!siteUrl.startsWith('https://')){ msg.innerHTML='<div class="msg-box err">Ingrese la URL completa de SharePoint.</div>'; return; }
-  M365={clientId,tenantId,siteUrl};
-  localStorage.setItem(M365_KEY,JSON.stringify(M365));
-  msg.innerHTML='<div class="msg-box ok">Configuración guardada.</div>';
-}
-function cargarConfigM365(){
-  const a=document.getElementById('cfg-client-id'), b=document.getElementById('cfg-tenant-id'), c=document.getElementById('cfg-site-url');
-  if(a)a.value=M365.clientId||''; if(b)b.value=M365.tenantId||'organizations'; if(c)c.value=M365.siteUrl||'';
-}
-function inicializarMSAL(){
-  if(!window.msal) throw new Error('No se pudo cargar MSAL Browser.');
-  if(!M365.clientId) throw new Error('Falta configurar el Client ID de Entra ID.');
-  if(!msalApp){
-    msalApp=new msal.PublicClientApplication({
-      auth:{clientId:M365.clientId,authority:`https://login.microsoftonline.com/${M365.tenantId||'organizations'}`,redirectUri:window.location.origin+window.location.pathname},
-      cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}
-    });
-  }
-  return msalApp;
-}
-async function obtenerTokenGraph(){
-  const app=inicializarMSAL();
-  const accounts=app.getAllAccounts();
-  if(!accounts.length) throw new Error('No hay sesión Microsoft 365.');
-  const req={scopes:['User.Read','Sites.ReadWrite.All'],account:accounts[0]};
-  try { const r=await app.acquireTokenSilent(req); graphToken=r.accessToken; return r.accessToken; }
-  catch(e){ const r=await app.acquireTokenPopup(req); graphToken=r.accessToken; return r.accessToken; }
-}
-function siteParts(){
-  const u=new URL(M365.siteUrl); return {host:u.hostname,path:u.pathname.replace(/\/$/,'')};
-}
-async function graph(path,options={}){
-  const token=graphToken||await obtenerTokenGraph();
-  const r=await fetch('https://graph.microsoft.com/v1.0'+path,{...options,headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json',...(options.headers||{})}});
-  if(!r.ok){let detail='';try{detail=await r.text()}catch(_){} throw new Error('Microsoft Graph '+r.status+(detail?': '+detail:''));}
-  return r.status===204?null:r.json();
-}
-async function resolverSite(){
-  const {host,path}=siteParts();
-  const data=await graph(`/sites/${host}:${path}`);
-  graphSiteId=data.id; return data;
-}
-async function graphListItems(listTitle, select='*'){
-  if(!graphSiteId) await resolverSite();
-  const url=`/sites/${graphSiteId}/lists/${encodeURIComponent(listTitle)}/items?expand=fields(select=${select})`;
-  let data=await graph(url); let all=data.value||[];
-  while(data['@odata.nextLink']){ const r=await fetch(data['@odata.nextLink'],{headers:{Authorization:'Bearer '+graphToken}}); if(!r.ok) throw new Error('Error paginando SharePoint'); data=await r.json(); all=all.concat(data.value||[]); }
-  return all;
-}
-async function cargarRolesDesdeSharePoint(){
-  const email=(await graph('/me')).mail || (await graph('/me')).userPrincipalName;
-  const items=await graphListItems('Roles','Title,Correo,Rol');
-  const found=items.map(x=>x.fields||{}).find(x=>String(x.Correo||'').toLowerCase()===String(email||'').toLowerCase());
-  if(!found) throw new Error(`El usuario ${email} no está registrado en la lista Roles.`);
-  return {email,rol:found.Rol};
-}
-async function loginMicrosoft(){
-  const msg=document.getElementById('login-msg');
-  try{
-    cargarConfigM365();
-    const app=inicializarMSAL();
-    const result=await app.loginPopup({scopes:['User.Read','Sites.ReadWrite.All']});
-    graphToken=result.accessToken;
-    const role=await cargarRolesDesdeSharePoint();
-    SESSION={user:role.email,rol:role.rol};
-    document.getElementById('login-screen').style.display='none';
-    document.getElementById('app').style.display='grid';
-    document.getElementById('who-user').textContent=role.email;
-    document.getElementById('who-rol').textContent=role.rol;
-    buildNav(); goTab(role.rol==='RRHH'?'observaciones':'dashboard');
-  }catch(e){
-    console.error(e); msg.innerHTML='<div class="msg-box err">'+escapeHtml(e.message||String(e))+'</div>';
-  }
-}
-async function cargarDatosSharePoint(){
-  if(!M365.clientId || !M365.siteUrl) return false;
-  try{
-    await obtenerTokenGraph();
-    const maps=await Promise.all([
-      graphListItems('Trabajadores','Title,Nombre,CodigoHapiqa,Correo'),
-      graphListItems('Vinculos','Title,FechaIngreso,FechaCese,Cargo,RegimenLaboral,Proyecto,Item,Estado'),
-      graphListItems('Talana','Title,Fecha,Entrada,Salida,Origen'),
-      graphListItems('Francoplan','Title,Fecha,Codigo,MesVersion,Revision,FechaCarga'),
-      graphListItems('Tareo','Title,Fecha,CodigoFrancoplan,MarcoTalana,Estado,Marca,Motivo,Proyecto,Item'),
-      graphListItems('Observaciones','Title,Fecha,Tipo,Motivo,Estado'),
-      graphListItems('AlertasMarcacion','Title,Fecha,Estado,Canal')
-    ]);
-    DB._sharepoint={trabajadores:maps[0],vinculos:maps[1],talana:maps[2],francoplan:maps[3],tareo:maps[4],observaciones:maps[5],alertas:maps[6],loadedAt:todayIso()};
-    saveDB();
-    return true;
-  }catch(e){ console.warn('SharePoint no disponible:',e); return false; }
-}
-window.addEventListener('load',()=>{ setTimeout(cargarConfigM365,50); });
-
-/* ==========================================================
-   BACKEND SHAREPOINT / POWER AUTOMATE — CONFIGURACIÓN
-   La interfaz conserva el motor local como respaldo/MVP.
-   Para producción, activar estas URLs y usar fetch() para leer/escribir.
-   ========================================================== */
-const SHAREPOINT_CONFIG = {
-  enabled: false,
-  siteUrl: '',
-  flows: {
-    importarPadron: '',
-    importarTalana: '',
-    importarFrancoplan: '',
-    procesarTareo: '',
-    generarTxt: '',
-    procesarAlertas: '',
-    regularizar: ''
-  }
-};
-
-async function llamarFlujoPowerAutomate(nombre, payload={}){
-  const url = SHAREPOINT_CONFIG.flows[nombre];
-  if(!SHAREPOINT_CONFIG.enabled || !url) throw new Error('Flujo de Power Automate no configurado: '+nombre);
-  const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  if(!r.ok) throw new Error('Power Automate respondió HTTP '+r.status);
-  const ct=r.headers.get('content-type')||'';
-  return ct.includes('application/json') ? r.json() : r.text();
-}
-
-function usarBackendSharePoint(){ return SHAREPOINT_CONFIG.enabled === true; }
-
-</script>
+<script type="text/javascript" src="https://gc.kes.v2.scr.kaspersky-labs.com/7EA5E9BB-55E1-4C31-9C21-4943DDFED2E4/main.js?attr=fJlikQ5heqKDcp5Oun-AEz7Fot8iVdEnV3NB7HuKrfEANh8eFskLGKEFvTKngJBjs4NsCB63fu-ZIxQ2h6xGDk-9b8Im8uMb7OiMSJj8pk9yQlRqVcLL5FuRLCZyC9DjqcqGciVaSIcphKgHG8UQOfAJEBPr7w8c63o0iSltOLJFYPxsLHOxrIwmTIGodlnPQK9c-ztVKK884BcuUMaE3W01X4DjT84uNkoUcURkx_iEb3vnjeeJzw5TANtZbEBfd-AgW2fB6p15hBuGuFXpSk_rzF5rHGJfSDCZPFrz3peMo3XYE2uAptfq3kFYO73QXse7_-V5RgI1w07zdsCQMTLS1yddoAUjAKIXn_pcydc" charset="UTF-8"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/5.0.0/js/msal-browser.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -346,8 +205,8 @@ function usarBackendSharePoint(){ return SHAREPOINT_CONFIG.enabled === true; }
       <details style="margin-top:14px">
         <summary style="cursor:pointer;font-size:12px;color:var(--muted)">Configuración inicial</summary>
         <div style="margin-top:12px">
-          <div class="field"><label>Client ID (Entra ID)</label><input id="cfg-client-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
-          <div class="field"><label>Tenant ID</label><input id="cfg-tenant-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx o organizations"></div>
+          <div class="field"><label>Client ID (Entra ID)</label><input id="cfg-client-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" readonly></div>
+          <div class="field"><label>Tenant ID</label><input id="cfg-tenant-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx o organizations" readonly></div>
           <div class="field"><label>URL del sitio SharePoint</label><input id="cfg-site-url" placeholder="https://empresa.sharepoint.com/sites/ControlTareo"></div>
           <button class="btn secondary" onclick="guardarConfigM365()">Guardar configuración</button>
           <div id="cfg-msg" style="margin-top:8px"></div>
@@ -403,6 +262,147 @@ function usarBackendSharePoint(){ return SHAREPOINT_CONFIG.enabled === true; }
 </div>
 
 <script>
+/* ==========================================================
+   MICROSOFT 365 / ENTRA ID + MICROSOFT GRAPH
+   ========================================================== */
+const M365_KEY = 'controlTareoM365Config_v1';
+let M365 = JSON.parse(localStorage.getItem(M365_KEY)||'null') || {
+  clientId:'ba57cf93-d81f-4287-bfea-4994bc53cdab', tenantId:'947d6fae-c37b-4141-a00d-1b5468320f44', siteUrl:''
+};
+let msalApp = null;
+let graphToken = null;
+let graphSiteId = null;
+
+function guardarConfigM365(){
+  const clientId=(document.getElementById('cfg-client-id')?.value||'').trim();
+  const tenantId=(document.getElementById('cfg-tenant-id')?.value||'organizations').trim();
+  const siteUrl=(document.getElementById('cfg-site-url')?.value||'').trim();
+  const msg=document.getElementById('cfg-msg');
+  if(!/^[0-9a-fA-F-]{36}$/.test(clientId)){ msg.innerHTML='<div class="msg-box err">Client ID no válido.</div>'; return; }
+  if(!siteUrl.startsWith('https://')){ msg.innerHTML='<div class="msg-box err">Ingrese la URL completa de SharePoint.</div>'; return; }
+  M365={clientId,tenantId,siteUrl};
+  localStorage.setItem(M365_KEY,JSON.stringify(M365));
+  msg.innerHTML='<div class="msg-box ok">Configuración guardada.</div>';
+}
+function cargarConfigM365(){
+  const a=document.getElementById('cfg-client-id'), b=document.getElementById('cfg-tenant-id'), c=document.getElementById('cfg-site-url');
+  if(a)a.value=M365.clientId||''; if(b)b.value=M365.tenantId||'organizations'; if(c)c.value=M365.siteUrl||'';
+}
+function inicializarMSAL(){
+  if(!window.msal) throw new Error('No se pudo cargar Microsoft MSAL Browser. Recarga la página e inténtalo nuevamente.');
+  if(!M365.clientId) throw new Error('Falta configurar el Client ID de Entra ID.');
+  if(!msalApp){
+    msalApp=new msal.PublicClientApplication({
+      auth:{clientId:M365.clientId,authority:`https://login.microsoftonline.com/${M365.tenantId||'organizations'}`,redirectUri:window.location.origin+window.location.pathname},
+      cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}
+    });
+  }
+  return msalApp;
+}
+async function obtenerTokenGraph(){
+  const app=inicializarMSAL();
+  const accounts=app.getAllAccounts();
+  if(!accounts.length) throw new Error('No hay sesión Microsoft 365.');
+  const req={scopes:['User.Read','Sites.ReadWrite.All'],account:accounts[0]};
+  try { const r=await app.acquireTokenSilent(req); graphToken=r.accessToken; return r.accessToken; }
+  catch(e){ const r=await app.acquireTokenPopup(req); graphToken=r.accessToken; return r.accessToken; }
+}
+function siteParts(){
+  const u=new URL(M365.siteUrl); return {host:u.hostname,path:u.pathname.replace(/\/$/,'')};
+}
+async function graph(path,options={}){
+  const token=graphToken||await obtenerTokenGraph();
+  const r=await fetch('https://graph.microsoft.com/v1.0'+path,{...options,headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json',...(options.headers||{})}});
+  if(!r.ok){let detail='';try{detail=await r.text()}catch(_){} throw new Error('Microsoft Graph '+r.status+(detail?': '+detail:''));}
+  return r.status===204?null:r.json();
+}
+async function resolverSite(){
+  const {host,path}=siteParts();
+  const data=await graph(`/sites/${host}:${path}`);
+  graphSiteId=data.id; return data;
+}
+async function graphListItems(listTitle, select='*'){
+  if(!graphSiteId) await resolverSite();
+  const url=`/sites/${graphSiteId}/lists/${encodeURIComponent(listTitle)}/items?expand=fields(select=${select})`;
+  let data=await graph(url); let all=data.value||[];
+  while(data['@odata.nextLink']){ const r=await fetch(data['@odata.nextLink'],{headers:{Authorization:'Bearer '+graphToken}}); if(!r.ok) throw new Error('Error paginando SharePoint'); data=await r.json(); all=all.concat(data.value||[]); }
+  return all;
+}
+async function cargarRolesDesdeSharePoint(){
+  const email=(await graph('/me')).mail || (await graph('/me')).userPrincipalName;
+  const items=await graphListItems('Roles','Title,Correo,Rol');
+  const found=items.map(x=>x.fields||{}).find(x=>String(x.Correo||'').toLowerCase()===String(email||'').toLowerCase());
+  if(!found) throw new Error(`El usuario ${email} no está registrado en la lista Roles.`);
+  return {email,rol:found.Rol};
+}
+async function loginMicrosoft(){
+  const msg=document.getElementById('login-msg');
+  try{
+    cargarConfigM365();
+    const app=inicializarMSAL();
+    const result=await app.loginPopup({scopes:['User.Read','Sites.ReadWrite.All']});
+    graphToken=result.accessToken;
+    const role=await cargarRolesDesdeSharePoint();
+    SESSION={user:role.email,rol:role.rol};
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').style.display='grid';
+    document.getElementById('who-user').textContent=role.email;
+    document.getElementById('who-rol').textContent=role.rol;
+    buildNav(); goTab(role.rol==='RRHH'?'observaciones':'dashboard');
+  }catch(e){
+    console.error(e); msg.innerHTML='<div class="msg-box err">'+escapeHtml(e.message||String(e))+'</div>';
+  }
+}
+async function cargarDatosSharePoint(){
+  if(!M365.clientId || !M365.siteUrl) return false;
+  try{
+    await obtenerTokenGraph();
+    const maps=await Promise.all([
+      graphListItems('Trabajadores','Title,Nombre,CodigoHapiqa,Correo'),
+      graphListItems('Vinculos','Title,FechaIngreso,FechaCese,Cargo,RegimenLaboral,Proyecto,Item,Estado'),
+      graphListItems('Talana','Title,Fecha,Entrada,Salida,Origen'),
+      graphListItems('Francoplan','Title,Fecha,Codigo,MesVersion,Revision,FechaCarga'),
+      graphListItems('Tareo','Title,Fecha,CodigoFrancoplan,MarcoTalana,Estado,Marca,Motivo,Proyecto,Item'),
+      graphListItems('Observaciones','Title,Fecha,Tipo,Motivo,Estado'),
+      graphListItems('AlertasMarcacion','Title,Fecha,Estado,Canal')
+    ]);
+    DB._sharepoint={trabajadores:maps[0],vinculos:maps[1],talana:maps[2],francoplan:maps[3],tareo:maps[4],observaciones:maps[5],alertas:maps[6],loadedAt:todayIso()};
+    saveDB();
+    return true;
+  }catch(e){ console.warn('SharePoint no disponible:',e); return false; }
+}
+window.addEventListener('load',()=>{ setTimeout(cargarConfigM365,50); });
+
+/* ==========================================================
+   BACKEND SHAREPOINT / POWER AUTOMATE — CONFIGURACIÓN
+   La interfaz conserva el motor local como respaldo/MVP.
+   Para producción, activar estas URLs y usar fetch() para leer/escribir.
+   ========================================================== */
+const SHAREPOINT_CONFIG = {
+  enabled: false,
+  siteUrl: '',
+  flows: {
+    importarPadron: '',
+    importarTalana: '',
+    importarFrancoplan: '',
+    procesarTareo: '',
+    generarTxt: '',
+    procesarAlertas: '',
+    regularizar: ''
+  }
+};
+
+async function llamarFlujoPowerAutomate(nombre, payload={}){
+  const url = SHAREPOINT_CONFIG.flows[nombre];
+  if(!SHAREPOINT_CONFIG.enabled || !url) throw new Error('Flujo de Power Automate no configurado: '+nombre);
+  const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(!r.ok) throw new Error('Power Automate respondió HTTP '+r.status);
+  const ct=r.headers.get('content-type')||'';
+  return ct.includes('application/json') ? r.json() : r.text();
+}
+
+function usarBackendSharePoint(){ return SHAREPOINT_CONFIG.enabled === true; }
+
 /* =========================================================
    CONTROL DE TAREO — MVP
    Motor de conciliación Padrón (Hapiqa) + Francoplan + Talana
@@ -1829,35 +1829,6 @@ function handleRestoreFile(input){
   reader.readAsText(file);
 }
 
-/* ==========================================================
-   BACKEND SHAREPOINT / POWER AUTOMATE — CONFIGURACIÓN
-   La interfaz conserva el motor local como respaldo/MVP.
-   Para producción, activar estas URLs y usar fetch() para leer/escribir.
-   ========================================================== */
-const SHAREPOINT_CONFIG = {
-  enabled: false,
-  siteUrl: '',
-  flows: {
-    importarPadron: '',
-    importarTalana: '',
-    importarFrancoplan: '',
-    procesarTareo: '',
-    generarTxt: '',
-    procesarAlertas: '',
-    regularizar: ''
-  }
-};
-
-async function llamarFlujoPowerAutomate(nombre, payload={}){
-  const url = SHAREPOINT_CONFIG.flows[nombre];
-  if(!SHAREPOINT_CONFIG.enabled || !url) throw new Error('Flujo de Power Automate no configurado: '+nombre);
-  const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  if(!r.ok) throw new Error('Power Automate respondió HTTP '+r.status);
-  const ct=r.headers.get('content-type')||'';
-  return ct.includes('application/json') ? r.json() : r.text();
-}
-
-function usarBackendSharePoint(){ return SHAREPOINT_CONFIG.enabled === true; }
 
 </script>
 </body>
