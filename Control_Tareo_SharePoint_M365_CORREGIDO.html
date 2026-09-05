@@ -1,0 +1,1835 @@
+<!DOCTYPE html>
+<!--
+  Control de Tareo
+  Desarrollado por Victor Montiel · 2026
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Tareo</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%93%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<script type="text/javascript" src="https://gc.kes.v2.scr.kaspersky-labs.com/7EA5E9BB-55E1-4C31-9C21-4943DDFED2E4/main.js?attr=fJlikQ5heqKDcp5Oun-AEz7Fot8iVdEnV3NB7HuKrfEANh8eFskLGKEFvTKngJBjs4NsCB63fu-ZIxQ2h6xGDk-9b8Im8uMb7OiMSJj8pk9yQlRqVcLL5FuRLCZyC9DjqcqGciVaSIcphKgHG8UQOfAJEBPr7w8c63o0iSltOLJFYPxsLHOxrIwmTIGodlnPQK9c-ztVKK884BcuUMaE3W01X4DjT84uNkoUcURkx_iEb3vnjeeJzw5TANtZbEBfd-AgW2fB6p15hBuGuFXpSk_rzF5rHGJfSDCZPFrz3peMo3XYE2uAptfq3kFYO73QXse7_-V5RgI1w07zdsCQMTLS1yddoAUjAKIXn_pcydc" charset="UTF-8"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/5.0.0/js/msal-browser.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F6FA;
+    --panel:#FFFFFF;
+    --ink:#171B23;
+    --ink-soft:#454B58;
+    --line:#E4E6EE;
+    --muted:#767C8C;
+    --primary:#2F6FED;
+    --primary-deep:#1E52C4;
+    --primary-bg:#E9F0FE;
+    --success:#17A65C;
+    --success-bg:#E3F7EC;
+    --warn:#F0930F;
+    --warn-bg:#FEF1DD;
+    --danger:#E1483B;
+    --danger-bg:#FCE7E5;
+    --sans: "Plus Jakarta Sans", "Segoe UI", Roboto, Arial, sans-serif;
+    --mono: "JetBrains Mono", "SFMono-Regular", Consolas, Menlo, monospace;
+    --radius:12px;
+    --radius-sm:8px;
+    --shadow: 0 1px 2px rgba(23,27,35,.04), 0 6px 20px rgba(23,27,35,.06);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:var(--sans);
+    background:var(--bg); color:var(--ink); font-size:14px;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{ font-family:var(--sans); font-weight:700; letter-spacing:-.01em; }
+
+  #login-screen{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(760px 480px at 12% 8%, rgba(255,255,255,.16), transparent 60%),
+      radial-gradient(900px 620px at 92% 96%, rgba(255,255,255,.14), transparent 55%),
+      linear-gradient(135deg,#2F6FED 0%,#4C8CF0 42%,#17B08A 100%);
+    padding:20px;
+  }
+  .login-card{
+    background:var(--panel); padding:0; border-radius:20px; width:380px;
+    box-shadow:0 30px 70px rgba(16,24,50,.35);
+    overflow:hidden;
+  }
+  .login-card::before{ content:''; display:block; height:6px; background:linear-gradient(90deg,var(--primary),var(--success)); }
+  .login-card .login-top{
+    padding:30px 32px 22px;
+  }
+  .login-icon{
+    width:44px; height:44px; border-radius:12px; background:var(--primary-bg); color:var(--primary);
+    display:flex; align-items:center; justify-content:center; font-size:21px; margin-bottom:14px;
+  }
+  .login-card .login-body{ padding:6px 32px 32px; }
+  .login-card h1{font-size:24px; margin:0; letter-spacing:-.02em; font-weight:800; color:var(--ink);}
+  .login-card p.sub{color:var(--muted); margin:6px 0 0; font-size:12.8px;}
+  .login-card label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px; margin-top:16px; font-weight:600;}
+  .login-card select, .login-card input{
+    width:100%; padding:11px 13px; border:1.5px solid var(--line); border-radius:var(--radius-sm); font-size:14.5px;
+    font-family:var(--sans); background:#fff; color:var(--ink);
+  }
+  .login-card select:focus, .login-card input:focus{ outline:none; border-color:var(--primary); }
+  .login-card button{
+    margin-top:24px; width:100%; padding:13px; background:var(--primary); color:#fff;
+    border:none; border-radius:var(--radius-sm); font-size:14.5px; cursor:pointer; font-weight:700; letter-spacing:.1px;
+    box-shadow:0 8px 18px rgba(47,111,237,.35);
+  }
+  .login-card button:hover{background:var(--primary-deep);}
+  .login-msg{margin-top:12px; font-size:12.5px; color:var(--danger); min-height:16px; font-weight:600;}
+  .login-hint{margin-top:10px; font-size:11.5px; color:var(--muted);}
+
+  #app{display:none; min-height:100vh; grid-template-columns:220px 1fr;}
+  nav{background:var(--ink); color:#eee; padding:0; display:flex; flex-direction:column;}
+  nav .brand{
+    padding:24px 20px 18px; font-size:17px; font-weight:800; letter-spacing:-.01em; color:#fff;
+  }
+  nav .brand small{display:block; font-weight:500; color:#8E93A3; font-size:10.5px; margin-top:4px; letter-spacing:.2px;}
+  nav #tabs{padding:6px 10px;}
+  nav button.tab{
+    background:none; border:none; color:#B7BCCB; text-align:left; padding:10px 14px; font-size:13.3px;
+    cursor:pointer; font-family:var(--sans); display:block; width:100%; border-radius:var(--radius-sm);
+    margin-bottom:2px; font-weight:500;
+  }
+  nav button.tab:hover{background:rgba(255,255,255,.06); color:#fff;}
+  nav button.tab.active{background:var(--primary); color:#fff; font-weight:700;}
+  nav .who{margin-top:auto; padding:16px 20px 0; border-top:1px solid rgba(255,255,255,.1); font-size:11.5px; color:#8E93A3;}
+  nav .who b{color:#fff;}
+  nav .logout{background:none; border:none; color:#F1A8A0; font-size:12px; cursor:pointer; padding:8px 20px 18px; text-align:left; font-family:var(--sans); font-weight:600;}
+  nav .credit{padding:0 20px 16px; font-size:10.3px; color:#5B6072; letter-spacing:.1px;}
+
+  main{padding:30px 36px; overflow-x:auto;}
+  h2.page-title{margin:0 0 4px; font-size:23px; color:var(--ink); font-weight:800; letter-spacing:-.02em;}
+  p.page-sub{margin:0 0 22px; color:var(--muted); font-size:13px; max-width:64ch;}
+
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px; margin-bottom:24px;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow);}
+  .card .num{font-size:24px; font-weight:800; line-height:1.25; letter-spacing:-.02em;}
+  .card .lbl{font-size:11.8px; color:var(--muted); margin-top:3px; font-weight:500;}
+  .card.alert{background:var(--danger-bg); border-color:transparent;}
+  .card.alert .num{color:var(--danger);}
+  .card.warn{background:var(--warn-bg); border-color:transparent;}
+  .card.warn .num{color:var(--warn);}
+
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:22px; margin-bottom:20px; box-shadow:var(--shadow);}
+  .panel h3{margin:0 0 12px; font-size:15.5px; font-weight:700;}
+  .row{display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;}
+  .field{display:flex; flex-direction:column; gap:5px;}
+  .field label{font-size:12px; color:var(--muted); font-weight:600;}
+  .field input, .field select{padding:8px 10px; border:1.5px solid var(--line); border-radius:var(--radius-sm); font-size:13.5px; font-family:var(--sans);}
+  .field input:focus, .field select:focus{ outline:none; border-color:var(--primary); }
+  button.btn{
+    background:var(--primary); color:#fff; border:none; padding:10px 20px; border-radius:var(--radius-sm);
+    font-size:13.3px; cursor:pointer; font-weight:700; letter-spacing:.1px; font-family:var(--sans);
+  }
+  button.btn:hover{background:var(--primary-deep);}
+  button.btn.secondary{background:#fff; color:var(--primary); border:1.5px solid var(--primary);}
+  button.btn.secondary:hover{background:var(--primary-bg);}
+  button.btn.small{padding:6px 12px; font-size:12px;}
+  button.btn:disabled{opacity:.5; cursor:not-allowed;}
+
+  table{border-collapse:collapse; width:100%; font-size:12.9px;}
+  table th{
+    text-align:left; padding:10px 12px; background:#F7F8FB; border-bottom:1.5px solid var(--line);
+    position:sticky; top:0; font-weight:700; white-space:nowrap; font-size:11.5px; color:var(--ink-soft);
+  }
+  table td{padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap;}
+  table tr:hover td{background:#FAFBFE;}
+  .table-wrap{max-height:480px; overflow:auto; border:1px solid var(--line); border-radius:var(--radius);}
+
+  /* estados como chips redondeados y coloridos — claros de un vistazo */
+  .badge{
+    display:inline-block; padding:4px 11px; border-radius:100px; font-size:11.3px; font-weight:700;
+    letter-spacing:.1px;
+  }
+  .badge.ok{background:var(--success-bg); color:var(--success);}
+  .badge.warn{background:var(--warn-bg); color:var(--warn);}
+  .badge.danger{background:var(--danger-bg); color:var(--danger);}
+  .badge.muted{background:#EEF0F5; color:var(--muted);}
+
+  .empty{padding:34px; text-align:center; color:var(--muted); font-size:13.3px;}
+  .msg-box{padding:12px 15px; border-radius:var(--radius-sm); font-size:12.9px; margin-bottom:14px; font-weight:500;}
+  .msg-box.ok{background:var(--success-bg); color:#0F7A46;}
+  .msg-box.err{background:var(--danger-bg); color:#B93327;}
+  .msg-box.info{background:var(--primary-bg); color:var(--primary-deep);}
+
+  .modal-bg{
+    position:fixed; inset:0; background:rgba(17,20,28,.55); display:none; align-items:center; justify-content:center; z-index:50;
+  }
+  .modal{background:var(--panel); border-radius:18px; padding:28px; width:380px; max-width:90vw; box-shadow:0 30px 70px rgba(16,24,50,.35);}
+  .modal h3{margin-top:0; font-size:17px; font-weight:800;}
+  .modal .field{margin-bottom:12px; width:100%;}
+  .modal .actions{display:flex; justify-content:flex-end; gap:8px; margin-top:18px;}
+
+  .hidden{display:none !important;}
+  code.mono{font-family:var(--mono); background:#EEF0F5; padding:2px 7px; border-radius:6px; font-size:12px; color:var(--ink-soft);}
+
+  /* botón nativo de "Seleccionar archivo" con la misma identidad que el resto de botones */
+  input[type="file"]{
+    font-family:var(--sans); font-size:13px; color:var(--muted); max-width:100%;
+  }
+  input[type="file"]::file-selector-button,
+  input[type="file"]::-webkit-file-upload-button{
+    background:var(--primary); color:#fff; border:none; padding:10px 18px; border-radius:var(--radius-sm);
+    font-family:var(--sans); font-weight:700; font-size:12.8px; cursor:pointer; margin-right:14px;
+    letter-spacing:.1px;
+  }
+  input[type="file"]::file-selector-button:hover,
+  input[type="file"]::-webkit-file-upload-button:hover{ background:var(--primary-deep); }
+  .filebox{border:1.5px dashed var(--line); border-radius:var(--radius); padding:14px; text-align:center; font-size:12.5px; color:var(--muted); margin-bottom:10px;}
+  .filebox.has-file{border-color:var(--primary); color:var(--ink);}
+  .tag-list{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;}
+  .tag-list span{background:#EEF0F5; padding:3px 10px; border-radius:100px; font-size:11.3px; font-family:var(--mono);}
+</style>
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-top">
+      <div class="login-icon">🗓️</div>
+      <h1>Control de Tareo</h1>
+      <p class="sub">Conciliación de asistencia — Padrón · Francoplan · Talana</p>
+    </div>
+    <div class="login-body">
+      <button onclick="loginMicrosoft()">🔐 Ingresar con Microsoft 365</button>
+      <div class="login-msg" id="login-msg"></div>
+      <div class="login-hint" id="login-hint">La versión conectada usará tu cuenta corporativa y la lista Roles de SharePoint.</div>
+      <details style="margin-top:14px">
+        <summary style="cursor:pointer;font-size:12px;color:var(--muted)">Configuración inicial</summary>
+        <div style="margin-top:12px">
+          <div class="field"><label>Client ID (Entra ID)</label><input id="cfg-client-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" readonly></div>
+          <div class="field"><label>Tenant ID</label><input id="cfg-tenant-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx o organizations" readonly></div>
+          <div class="field"><label>URL del sitio SharePoint</label><input id="cfg-site-url" placeholder="https://empresa.sharepoint.com/sites/ControlTareo"></div>
+          <button class="btn secondary" onclick="guardarConfigM365()">Guardar configuración</button>
+          <div id="cfg-msg" style="margin-top:8px"></div>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <nav>
+    <div class="brand">Control de Tareo<small>Microsoft 365 · SharePoint</small></div>
+    <div id="tabs"></div>
+    <div class="who">Sesión: <b id="who-user"></b><br><span id="who-rol"></span></div>
+    <button class="logout" onclick="logout()">Cerrar sesión</button>
+    <div class="credit">Desarrollado por Victor Montiel · 2026</div>
+  </nav>
+  <main id="main"></main>
+</div>
+
+<!-- MODAL: regularizar -->
+<div class="modal-bg" id="modal-reg">
+  <div class="modal">
+    <h3>Regularizar observación</h3>
+    <div id="modal-reg-info" style="font-size:12.8px; color:var(--muted); margin-bottom:14px;"></div>
+    <div class="field">
+      <label>Código de justificación</label>
+      <select id="modal-reg-codigo" onchange="updateModalRegPreview()">
+      </select>
+    </div>
+    <div id="modal-reg-preview" style="font-size:12.3px; color:var(--muted); margin-top:-6px;"></div>
+    <div class="actions">
+      <button class="btn secondary" onclick="closeModalReg()">Cancelar</button>
+      <button class="btn" onclick="confirmRegularizacion()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: set pin first time -->
+<div class="modal-bg" id="modal-setpin">
+  <div class="modal">
+    <h3>Configurar PIN — <span id="setpin-user"></span></h3>
+    <p style="font-size:12.5px;color:var(--muted)">Primera vez que este usuario ingresa. Define un PIN de 4 dígitos.</p>
+    <div class="field"><label>Nuevo PIN</label><input id="setpin-a" type="password" maxlength="4" inputmode="numeric"></div>
+    <div class="field"><label>Confirmar PIN</label><input id="setpin-b" type="password" maxlength="4" inputmode="numeric"></div>
+    <div class="login-msg" id="setpin-msg"></div>
+    <div class="actions">
+      <button class="btn secondary" onclick="closeSetPin()">Cancelar</button>
+      <button class="btn" onclick="confirmSetPin()">Guardar PIN</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ==========================================================
+   MICROSOFT 365 / ENTRA ID + MICROSOFT GRAPH
+   ========================================================== */
+const M365_KEY = 'controlTareoM365Config_v1';
+let M365 = JSON.parse(localStorage.getItem(M365_KEY)||'null') || {
+  clientId:'ba57cf93-d81f-4287-bfea-4994bc53cdab', tenantId:'947d6fae-c37b-4141-a00d-1b5468320f44', siteUrl:''
+};
+let msalApp = null;
+let graphToken = null;
+let graphSiteId = null;
+
+function guardarConfigM365(){
+  const clientId=(document.getElementById('cfg-client-id')?.value||'').trim();
+  const tenantId=(document.getElementById('cfg-tenant-id')?.value||'organizations').trim();
+  const siteUrl=(document.getElementById('cfg-site-url')?.value||'').trim();
+  const msg=document.getElementById('cfg-msg');
+  if(!/^[0-9a-fA-F-]{36}$/.test(clientId)){ msg.innerHTML='<div class="msg-box err">Client ID no válido.</div>'; return; }
+  if(!siteUrl.startsWith('https://')){ msg.innerHTML='<div class="msg-box err">Ingrese la URL completa de SharePoint.</div>'; return; }
+  M365={clientId,tenantId,siteUrl};
+  localStorage.setItem(M365_KEY,JSON.stringify(M365));
+  msg.innerHTML='<div class="msg-box ok">Configuración guardada.</div>';
+}
+function cargarConfigM365(){
+  const a=document.getElementById('cfg-client-id'), b=document.getElementById('cfg-tenant-id'), c=document.getElementById('cfg-site-url');
+  if(a)a.value=M365.clientId||''; if(b)b.value=M365.tenantId||'organizations'; if(c)c.value=M365.siteUrl||'';
+}
+function inicializarMSAL(){
+  if(!window.msal) throw new Error('No se pudo cargar Microsoft MSAL Browser. Recarga la página e inténtalo nuevamente.');
+  if(!M365.clientId) throw new Error('Falta configurar el Client ID de Entra ID.');
+  if(!msalApp){
+    msalApp=new msal.PublicClientApplication({
+      auth:{clientId:M365.clientId,authority:`https://login.microsoftonline.com/${M365.tenantId||'organizations'}`,redirectUri:window.location.origin+window.location.pathname},
+      cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}
+    });
+  }
+  return msalApp;
+}
+async function obtenerTokenGraph(){
+  const app=inicializarMSAL();
+  const accounts=app.getAllAccounts();
+  if(!accounts.length) throw new Error('No hay sesión Microsoft 365.');
+  const req={scopes:['User.Read','Sites.ReadWrite.All'],account:accounts[0]};
+  try { const r=await app.acquireTokenSilent(req); graphToken=r.accessToken; return r.accessToken; }
+  catch(e){ const r=await app.acquireTokenPopup(req); graphToken=r.accessToken; return r.accessToken; }
+}
+function siteParts(){
+  const u=new URL(M365.siteUrl); return {host:u.hostname,path:u.pathname.replace(/\/$/,'')};
+}
+async function graph(path,options={}){
+  const token=graphToken||await obtenerTokenGraph();
+  const r=await fetch('https://graph.microsoft.com/v1.0'+path,{...options,headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json',...(options.headers||{})}});
+  if(!r.ok){let detail='';try{detail=await r.text()}catch(_){} throw new Error('Microsoft Graph '+r.status+(detail?': '+detail:''));}
+  return r.status===204?null:r.json();
+}
+async function resolverSite(){
+  const {host,path}=siteParts();
+  const data=await graph(`/sites/${host}:${path}`);
+  graphSiteId=data.id; return data;
+}
+async function graphListItems(listTitle, select='*'){
+  if(!graphSiteId) await resolverSite();
+  const url=`/sites/${graphSiteId}/lists/${encodeURIComponent(listTitle)}/items?expand=fields(select=${select})`;
+  let data=await graph(url); let all=data.value||[];
+  while(data['@odata.nextLink']){ const r=await fetch(data['@odata.nextLink'],{headers:{Authorization:'Bearer '+graphToken}}); if(!r.ok) throw new Error('Error paginando SharePoint'); data=await r.json(); all=all.concat(data.value||[]); }
+  return all;
+}
+async function cargarRolesDesdeSharePoint(){
+  const email=(await graph('/me')).mail || (await graph('/me')).userPrincipalName;
+  const items=await graphListItems('Roles','Title,Correo,Rol');
+  const found=items.map(x=>x.fields||{}).find(x=>String(x.Correo||'').toLowerCase()===String(email||'').toLowerCase());
+  if(!found) throw new Error(`El usuario ${email} no está registrado en la lista Roles.`);
+  return {email,rol:found.Rol};
+}
+async function loginMicrosoft(){
+  const msg=document.getElementById('login-msg');
+  try{
+    cargarConfigM365();
+    const app=inicializarMSAL();
+    const result=await app.loginPopup({scopes:['User.Read','Sites.ReadWrite.All']});
+    graphToken=result.accessToken;
+    const role=await cargarRolesDesdeSharePoint();
+    SESSION={user:role.email,rol:role.rol};
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').style.display='grid';
+    document.getElementById('who-user').textContent=role.email;
+    document.getElementById('who-rol').textContent=role.rol;
+    buildNav(); goTab(role.rol==='RRHH'?'observaciones':'dashboard');
+  }catch(e){
+    console.error(e); msg.innerHTML='<div class="msg-box err">'+escapeHtml(e.message||String(e))+'</div>';
+  }
+}
+async function cargarDatosSharePoint(){
+  if(!M365.clientId || !M365.siteUrl) return false;
+  try{
+    await obtenerTokenGraph();
+    const maps=await Promise.all([
+      graphListItems('Trabajadores','Title,Nombre,CodigoHapiqa,Correo'),
+      graphListItems('Vinculos','Title,FechaIngreso,FechaCese,Cargo,RegimenLaboral,Proyecto,Item,Estado'),
+      graphListItems('Talana','Title,Fecha,Entrada,Salida,Origen'),
+      graphListItems('Francoplan','Title,Fecha,Codigo,MesVersion,Revision,FechaCarga'),
+      graphListItems('Tareo','Title,Fecha,CodigoFrancoplan,MarcoTalana,Estado,Marca,Motivo,Proyecto,Item'),
+      graphListItems('Observaciones','Title,Fecha,Tipo,Motivo,Estado'),
+      graphListItems('AlertasMarcacion','Title,Fecha,Estado,Canal')
+    ]);
+    DB._sharepoint={trabajadores:maps[0],vinculos:maps[1],talana:maps[2],francoplan:maps[3],tareo:maps[4],observaciones:maps[5],alertas:maps[6],loadedAt:todayIso()};
+    saveDB();
+    return true;
+  }catch(e){ console.warn('SharePoint no disponible:',e); return false; }
+}
+window.addEventListener('load',()=>{ setTimeout(cargarConfigM365,50); });
+
+/* ==========================================================
+   BACKEND SHAREPOINT / POWER AUTOMATE — CONFIGURACIÓN
+   La interfaz conserva el motor local como respaldo/MVP.
+   Para producción, activar estas URLs y usar fetch() para leer/escribir.
+   ========================================================== */
+const SHAREPOINT_CONFIG = {
+  enabled: false,
+  siteUrl: '',
+  flows: {
+    importarPadron: '',
+    importarTalana: '',
+    importarFrancoplan: '',
+    procesarTareo: '',
+    generarTxt: '',
+    procesarAlertas: '',
+    regularizar: ''
+  }
+};
+
+async function llamarFlujoPowerAutomate(nombre, payload={}){
+  const url = SHAREPOINT_CONFIG.flows[nombre];
+  if(!SHAREPOINT_CONFIG.enabled || !url) throw new Error('Flujo de Power Automate no configurado: '+nombre);
+  const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(!r.ok) throw new Error('Power Automate respondió HTTP '+r.status);
+  const ct=r.headers.get('content-type')||'';
+  return ct.includes('application/json') ? r.json() : r.text();
+}
+
+function usarBackendSharePoint(){ return SHAREPOINT_CONFIG.enabled === true; }
+
+/* =========================================================
+   CONTROL DE TAREO — MVP
+   Motor de conciliación Padrón (Hapiqa) + Francoplan + Talana
+   ========================================================= */
+
+const DB_KEY = 'controlTareoDB_v1';
+let DB = null;
+let SESSION = null; // {user, rol}
+let pendingSetPin = null;
+
+/* ---------- utilidades ---------- */
+function todayIso(){ return new Date().toISOString(); }
+function pad2(n){ return String(n).padStart(2,'0'); }
+function isoDate(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+function toDisplayDate(iso){ const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; }
+function dniKey(v){
+  if(v===undefined||v===null) return '';
+  let s = String(v).trim();
+  s = s.replace(/[^0-9A-Za-z]/g,'');
+  // si es numerico, quitar ceros a la izquierda para normalizar la clave de cruce
+  if(/^\d+$/.test(s)){ s = s.replace(/^0+(?=\d)/,''); }
+  return s.toUpperCase();
+}
+async function sha256(text){
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function parseExcelDateCell(v){
+  // devuelve iso YYYY-MM-DD o null
+  if(v===undefined||v===null||v==='') return null;
+  if(v instanceof Date && !isNaN(v)) return isoDate(v);
+  if(typeof v === 'number'){
+    // serial excel
+    const d = XLSX.SSF.parse_date_code(v);
+    if(!d) return null;
+    return `${d.y}-${pad2(d.m)}-${pad2(d.d)}`;
+  }
+  if(typeof v === 'string'){
+    const s = v.trim();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(m) return `${m[1]}-${pad2(+m[2])}-${pad2(+m[3])}`;
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if(m) return `${m[3]}-${pad2(+m[2])}-${pad2(+m[1])}`;
+    return null;
+  }
+  return null;
+}
+function excelTimeCellHasValue(v){
+  return v!==undefined && v!==null && v!=='';
+}
+function findHeaderCol(headers, candidates){
+  for(const cand of candidates){
+    const idx = headers.findIndex(h => (h||'').toString().trim().toLowerCase() === cand.toLowerCase());
+    if(idx>=0) return idx;
+  }
+  // fallback: contiene
+  for(const cand of candidates){
+    const idx = headers.findIndex(h => (h||'').toString().trim().toLowerCase().includes(cand.toLowerCase()));
+    if(idx>=0) return idx;
+  }
+  return -1;
+}
+function lastHeaderCol(headers, candidates){
+  let found = -1;
+  headers.forEach((h,i)=>{
+    for(const cand of candidates){
+      if((h||'').toString().trim().toLowerCase() === cand.toLowerCase()) found = i;
+    }
+  });
+  return found;
+}
+function sheetToAOA(ws){
+  return XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+}
+function fmt(v){ return (v===undefined||v===null||v==='') ? '—' : v; }
+function escapeHtml(s){ return (s===undefined||s===null)?'':String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------- estado inicial ---------- */
+function freshDB(){
+  return {
+    usuarios: {},
+    trabajadores: {},   // dniKey -> {dniOriginal, nombre, correo, vinculos:[...]}
+    talana: {},         // "dniKey|fecha" -> {entrada, salida, dniOriginal, fecha, nombre}
+    francoplan: {},      // "AAAA-MM" -> {versions:[{rev,filename,fechaCarga,mesLabel,data:{dniKey:{fecha:code}}}]}
+    tareo: {},           // "dniKey|fecha" -> registro procesado
+    observaciones: [],   // lista {id,dniKey,dni,nombre,fecha,tipo,motivo,estado,codigoReg,usuarioReg,fechaHoraReg}
+    alertasMarcacion: {}, // "dniKey|fecha" -> {dni,nombre,fecha,estado:PENDIENTE|RESUELTA|ESCALADA,canal,notificado,fechaHoraNotificacion,fechaHoraResolucion,observacionVinculada}
+    historial: { cargas:[], procesos:[], txts:[] },
+    lastTxt: null
+  };
+}
+function loadDB(){
+  const raw = localStorage.getItem(DB_KEY);
+  if(raw){
+    try{ DB = JSON.parse(raw); }catch(e){ DB = freshDB(); }
+  } else {
+    DB = freshDB();
+  }
+  if(!DB.usuarios) DB.usuarios = {};
+  if(!DB.alertasMarcacion) DB.alertasMarcacion = {};
+}
+function saveDB(){
+  localStorage.setItem(DB_KEY, JSON.stringify(DB));
+}
+
+/* ---------- LOGIN ---------- */
+loadDB();
+document.getElementById('login-user').addEventListener('change', updateLoginHint);
+updateLoginHint();
+
+function updateLoginHint(){
+  const u = document.getElementById('login-user').value;
+  const hint = document.getElementById('login-hint');
+  if(!DB.usuarios[u]){
+    hint.textContent = 'Primera vez que ingresa este usuario: se le pedirá crear un PIN.';
+  } else {
+    hint.textContent = '';
+  }
+}
+
+async function handleLogin(){
+  const user = document.getElementById('login-user').value;
+  const pin = document.getElementById('login-pin').value.trim();
+  const msg = document.getElementById('login-msg');
+  msg.textContent='';
+  if(!/^\d{4}$/.test(pin)){ msg.textContent='El PIN debe tener 4 dígitos.'; return; }
+  if(!DB.usuarios[user]){
+    pendingSetPin = {user, pinTyped:pin};
+    document.getElementById('setpin-user').textContent = user;
+    document.getElementById('setpin-a').value = pin;
+    document.getElementById('setpin-b').value = '';
+    document.getElementById('setpin-msg').textContent = '';
+    document.getElementById('modal-setpin').style.display='flex';
+    return;
+  }
+  const hash = await sha256(user+':'+pin);
+  if(hash !== DB.usuarios[user].pinHash){
+    msg.textContent = 'PIN incorrecto.';
+    return;
+  }
+  startSession(user);
+}
+function closeSetPin(){ document.getElementById('modal-setpin').style.display='none'; pendingSetPin=null; }
+async function confirmSetPin(){
+  const a = document.getElementById('setpin-a').value.trim();
+  const b = document.getElementById('setpin-b').value.trim();
+  const msgEl = document.getElementById('setpin-msg');
+  if(!/^\d{4}$/.test(a)){ msgEl.textContent='PIN inválido.'; return; }
+  if(a!==b){ msgEl.textContent='Los PIN no coinciden.'; return; }
+  const user = pendingSetPin.user;
+  const rol = user==='RRHH' ? 'RRHH' : 'ADMINISTRACION';
+  const hash = await sha256(user+':'+a);
+  DB.usuarios[user] = {pinHash:hash, rol};
+  saveDB();
+  document.getElementById('modal-setpin').style.display='none';
+  startSession(user);
+}
+function startSession(user){
+  SESSION = {user, rol: DB.usuarios[user].rol};
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='grid';
+  document.getElementById('who-user').textContent = user;
+  document.getElementById('who-rol').textContent = SESSION.rol;
+  buildNav();
+  goTab(SESSION.rol==='RRHH' ? 'observaciones' : 'dashboard');
+}
+function logout(){
+  SESSION = null;
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
+  document.getElementById('login-pin').value='';
+}
+
+/* ---------- NAV ---------- */
+const TABS_ADMIN = [
+  ['dashboard','Dashboard'],
+  ['padron','Padrón'],
+  ['talana','Talana'],
+  ['francoplan','Francoplan'],
+  ['tareo','Tareo'],
+  ['alertas-marcacion','📢 Alertas de marcación'],
+  ['observaciones','Observaciones'],
+  ['txt','Generar TXT'],
+  ['historial','Historial'],
+];
+const TABS_RRHH = [
+  ['observaciones','Observaciones'],
+];
+let currentTab = null;
+function buildNav(){
+  const tabs = SESSION.rol==='RRHH' ? TABS_RRHH : TABS_ADMIN;
+  const el = document.getElementById('tabs');
+  el.innerHTML = tabs.map(([id,label])=>`<button class="tab" data-tab="${id}" onclick="goTab('${id}')">${label}</button>`).join('');
+}
+function goTab(id){
+  currentTab = id;
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
+  render();
+}
+function render(){
+  const main = document.getElementById('main');
+  const renderers = {
+    dashboard: renderDashboard,
+    padron: renderPadron,
+    talana: renderTalana,
+    francoplan: renderFrancoplan,
+    tareo: renderTareo,
+    'alertas-marcacion': renderAlertasMarcacion,
+    observaciones: renderObservaciones,
+    txt: renderTxt,
+    historial: renderHistorial,
+  };
+  main.innerHTML = '';
+  (renderers[currentTab]||renderDashboard)();
+}
+
+/* ==========================================================
+   DASHBOARD
+   ========================================================== */
+function renderDashboard(){
+  const nTrab = Object.values(DB.trabajadores).filter(t=>vinculoVigenteHoy(t)).length;
+  const ultTalana = DB.historial.cargas.filter(c=>c.tipo==='TALANA').slice(-1)[0];
+  const mesesFP = Object.keys(DB.francoplan).sort();
+  const ultMesFP = mesesFP[mesesFP.length-1];
+  const ultFPResumen = ultMesFP ? `${ultMesFP} (${DB.francoplan[ultMesFP].versions.length} versión${DB.francoplan[ultMesFP].versions.length>1?'es':''})` : null;
+  const pendientes = DB.observaciones.filter(o=>o.tipo==='RRHH' && o.estado==='PENDIENTE').length;
+  const alertas = DB.observaciones.filter(o=>o.tipo==='ADMIN').length;
+  const ultTxt = DB.historial.txts.slice(-1)[0];
+
+  const hoyIso = isoDate(new Date());
+  const alertasHoy = Object.values(DB.alertasMarcacion).filter(a=>a.fecha===hoyIso);
+  const amPendientes = alertasHoy.filter(a=>a.estado==='PENDIENTE').length;
+  const amResueltas = alertasHoy.filter(a=>a.estado==='RESUELTA').length;
+  const amEscaladas = alertasHoy.filter(a=>a.estado==='ESCALADA').length;
+
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <h2 class="page-title">Dashboard</h2>
+    <p class="page-sub">Resumen general del sistema</p>
+    <div class="cards">
+      <div class="card"><div class="num">${nTrab}</div><div class="lbl">Trabajadores activos</div></div>
+      <div class="card"><div class="num">${ultTalana ? toDisplayDate(ultTalana.fecha.split('T')[0]) : '—'}</div><div class="lbl">Última carga Talana</div></div>
+      <div class="card"><div class="num">${ultFPResumen ? escapeHtml(ultFPResumen) : '—'}</div><div class="lbl">Último Francoplan</div></div>
+      <div class="card warn"><div class="num">${pendientes}</div><div class="lbl">Observaciones pendientes (RR.HH.)</div></div>
+      <div class="card alert"><div class="num">${alertas}</div><div class="lbl">Alertas para Administración</div></div>
+      <div class="card"><div class="num">${ultTxt ? toDisplayDate(ultTxt.fecha.split('T')[0]) : '—'}</div><div class="lbl">Último TXT generado</div></div>
+    </div>
+    <div class="panel">
+      <h3>📢 Alertas de marcación — hoy (${toDisplayDate(hoyIso)})</h3>
+      <p style="font-size:12.8px;color:var(--muted)">🟡 ${amPendientes} trabajador(es) todavía no registran marcación hoy.</p>
+      <div class="cards">
+        <div class="card warn"><div class="num">${amPendientes}</div><div class="lbl">Pendientes</div></div>
+        <div class="card"><div class="num">${amResueltas}</div><div class="lbl">Resueltas</div></div>
+        <div class="card alert"><div class="num">${amEscaladas}</div><div class="lbl">Escaladas</div></div>
+      </div>
+      <button class="btn secondary" onclick="goTab('alertas-marcacion')">Ir a Alertas de marcación</button>
+    </div>
+    <div class="panel">
+      <h3>Flujo del sistema</h3>
+      <p style="font-size:12.8px;color:var(--muted)">Padrón (Hapiqa) → Francoplan (planificación) → Talana (marcación) → Motor de validación → Observaciones / Alertas → Regularización RR.HH. → Generación de TXT para Hapiqa.</p>
+      <div class="row">
+        <button class="btn" onclick="goTab('padron')">1. Cargar Padrón</button>
+        <button class="btn" onclick="goTab('talana')">2. Cargar Talana</button>
+        <button class="btn" onclick="goTab('francoplan')">3. Cargar Francoplan</button>
+        <button class="btn" onclick="goTab('tareo')">4. Procesar</button>
+        <button class="btn" onclick="goTab('observaciones')">5. Observaciones</button>
+        <button class="btn" onclick="goTab('txt')">6. Generar TXT</button>
+      </div>
+    </div>
+  `;
+}
+
+/* ==========================================================
+   PADRÓN
+   ========================================================== */
+function vinculoVigenteHoy(t){ return findVinculoVigente(t, new Date()); }
+
+function findVinculoVigente(trabajador, dateObj){
+  const iso = isoDate(dateObj);
+  for(const v of trabajador.vinculos){
+    if(v.ingreso && iso < v.ingreso) continue;
+    if(v.cese && iso > v.cese) continue;
+    if(v.ingreso && iso >= v.ingreso && (!v.cese || iso<=v.cese)) return v;
+  }
+  return null;
+}
+
+function renderPadron(){
+  const trabs = Object.values(DB.trabajadores).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <h2 class="page-title">Padrón (Hapiqa)</h2>
+    <p class="page-sub">Identifica trabajador, vínculo laboral, cargo, proyecto e ítem. El DNI se trata siempre como texto.</p>
+    ${SESSION.rol!=='RRHH' ? `
+    <div class="panel">
+      <h3>Cargar nuevo padrón</h3>
+      <input type="file" id="file-padron" accept=".xlsx,.xls" onchange="handlePadronFile(this)">
+      <div id="padron-msg"></div>
+    </div>` : ''}
+    <div class="panel">
+      <h3>Trabajadores registrados (${trabs.length})</h3>
+      <p style="font-size:12px;color:var(--muted)">El correo es necesario para las notificaciones del módulo "Alertas de marcación"; el padrón de Hapiqa no lo trae, así que se registra aquí manualmente.</p>
+      ${trabs.length===0 ? '<div class="empty">Aún no se ha cargado ningún padrón.</div>' : `
+      <div class="table-wrap"><table>
+        <thead><tr><th>DNI</th><th>Nombre</th><th>Cargo</th><th>Régimen</th><th>Proyecto</th><th>Ítem</th><th>Ingreso</th><th>Cese</th><th>Estado</th><th>Vínculos</th><th>Correo</th></tr></thead>
+        <tbody>
+        ${trabs.map(t=>{
+          const v = t.vinculos[t.vinculos.length-1];
+          const key = dniKey(t.dniOriginal);
+          return `<tr>
+            <td><code class="mono">${escapeHtml(t.dniOriginal)}</code></td>
+            <td>${escapeHtml(t.nombre)}</td>
+            <td>${escapeHtml(v.cargo)}</td>
+            <td>${escapeHtml(fmt(v.regimen))}</td>
+            <td>${escapeHtml(fmt(v.proyecto))}</td>
+            <td>${escapeHtml(fmt(v.item))}</td>
+            <td>${v.ingreso?toDisplayDate(v.ingreso):'—'}</td>
+            <td>${v.cese?toDisplayDate(v.cese):'<span class="badge ok">activo</span>'}</td>
+            <td>${escapeHtml(fmt(v.estado))}</td>
+            <td>${t.vinculos.length}</td>
+            <td>${SESSION.rol!=='RRHH' ? `<input type="email" value="${escapeHtml(t.correo||'')}" placeholder="correo@empresa.com" style="width:170px;padding:4px 6px;border:1px solid var(--line);border-radius:4px;font-size:12px;" onchange="guardarCorreoTrabajador('${key}', this.value)">` : escapeHtml(fmt(t.correo))}</td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table></div>`}
+    </div>
+  `;
+}
+function guardarCorreoTrabajador(key, correo){
+  const t = DB.trabajadores[key];
+  if(!t) return;
+  t.correo = correo.trim();
+  saveDB();
+}
+
+function handlePadronFile(input){
+  const file = input.files[0];
+  if(!file) return;
+  const msgEl = document.getElementById('padron-msg');
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const aoa = sheetToAOA(ws);
+      const headers = aoa[0].map(h=>h===null?'':h);
+      const colDni = findHeaderCol(headers, ['Núm.Doc.','Num.Doc.','DNI']);
+      const colNombre = findHeaderCol(headers, ['Nombre de Trabajador','Nombre','Apellidos y Nombres']);
+      const colEstado = findHeaderCol(headers, ['Estado']);
+      const colIngreso = findHeaderCol(headers, ['Fec.Ing.','Fecha Ingreso']);
+      const colCese = findHeaderCol(headers, ['Fec.Ces.','Fecha Cese']);
+      const colCargo = findHeaderCol(headers, ['Carg. Trab.','Cargo']);
+      const colRegimen = findHeaderCol(headers, ['Reg.Laboral','Regimen']);
+      const colProyecto = findHeaderCol(headers, ['Proyecto']);
+      const colItem = lastHeaderCol(headers, ['Item','Ítem']);
+      const colCodigo = findHeaderCol(headers, ['Código','Codigo']);
+
+      if(colDni<0 || colIngreso<0){
+        msgEl.innerHTML = `<div class="msg-box err">No se encontraron las columnas esperadas (Núm.Doc. / Fec.Ing.) en la primera hoja. Verifique la estructura del archivo del padrón.</div>`;
+        return;
+      }
+
+      let nuevos=0, actualizados=0, reingresos=0, ceses=0;
+      for(let r=1; r<aoa.length; r++){
+        const row = aoa[r];
+        if(!row || row.every(c=>c===null||c==='')) continue;
+        const dniRaw = row[colDni];
+        if(dniRaw===null || dniRaw==='') continue;
+        const dniOriginal = String(dniRaw).trim();
+        const key = dniKey(dniOriginal);
+        const nombre = colNombre>=0 ? String(row[colNombre]||'').trim() : '(sin nombre)';
+        const ingreso = colIngreso>=0 ? parseExcelDateCell(row[colIngreso]) : null;
+        const cese = colCese>=0 ? parseExcelDateCell(row[colCese]) : null;
+        const cargo = colCargo>=0 ? String(row[colCargo]||'').trim().toUpperCase() : '';
+        const regimen = colRegimen>=0 ? row[colRegimen] : null;
+        const estado = colEstado>=0 ? row[colEstado] : null;
+        const proyecto = colProyecto>=0 ? row[colProyecto] : null;
+        const item = colItem>=0 ? row[colItem] : null;
+        const codigo = colCodigo>=0 ? row[colCodigo] : null;
+
+        const nuevoVinculo = {ingreso, cese, cargo, regimen, estado, proyecto, item, codigo};
+
+        if(!DB.trabajadores[key]){
+          DB.trabajadores[key] = {dniOriginal, nombre, vinculos:[nuevoVinculo]};
+          nuevos++;
+        } else {
+          const t = DB.trabajadores[key];
+          t.dniOriginal = dniOriginal; t.nombre = nombre;
+          const ultimo = t.vinculos[t.vinculos.length-1];
+          if(ingreso && ultimo.ingreso && ingreso > ultimo.ingreso){
+            // reingreso: nuevo vinculo
+            t.vinculos.push(nuevoVinculo);
+            reingresos++;
+          } else {
+            // actualizar vinculo vigente (misma fecha de ingreso o sin cambio relevante)
+            if(!ultimo.cese && cese) ceses++;
+            ultimo.cese = cese; ultimo.cargo = cargo; ultimo.regimen = regimen;
+            ultimo.estado = estado; ultimo.proyecto = proyecto; ultimo.item = item;
+            ultimo.codigo = codigo;
+            if(ingreso) ultimo.ingreso = ingreso;
+            actualizados++;
+          }
+        }
+      }
+      saveDB();
+      DB.historial.cargas.push({tipo:'PADRON', fecha: todayIso(), usuario:SESSION.user, detalle:`${file.name} — ${nuevos} nuevos, ${actualizados} actualizados, ${reingresos} reingresos`});
+      saveDB();
+      msgEl.innerHTML = `<div class="msg-box ok">Padrón procesado: ${nuevos} trabajadores nuevos, ${actualizados} actualizados, ${reingresos} reingresos detectados, ${ceses} ceses nuevos.</div>`;
+      renderPadron();
+    }catch(err){
+      console.error(err);
+      msgEl.innerHTML = `<div class="msg-box err">Error leyendo el archivo: ${escapeHtml(err.message)}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ==========================================================
+   TALANA
+   ========================================================== */
+function renderTalana(){
+  const registros = Object.values(DB.talana);
+  const fechas = [...new Set(registros.map(r=>r.fecha))].sort();
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <h2 class="page-title">Talana — Reporte de asistencia</h2>
+    <p class="page-sub">Si existe entrada o salida, el trabajador MARCÓ ese día. No se calculan horas, tardanzas ni jornada.</p>
+    ${SESSION.rol!=='RRHH' ? `
+    <div class="panel">
+      <h3>Cargar reporte Talana</h3>
+      <input type="file" id="file-talana" accept=".xlsx,.xls" onchange="handleTalanaFile(this)">
+      <div id="talana-msg"></div>
+    </div>` : ''}
+    <div class="panel">
+      <h3>Registros cargados (${registros.length})</h3>
+      <p style="font-size:12px;color:var(--muted)">Rango de fechas cargadas: ${fechas.length? toDisplayDate(fechas[0])+' — '+toDisplayDate(fechas[fechas.length-1]) : '—'}</p>
+      ${registros.length===0 ? '<div class="empty">Aún no se ha cargado ningún reporte de Talana.</div>' : `
+      <div class="table-wrap"><table>
+        <thead><tr><th>DNI</th><th>Nombre</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Marcó</th></tr></thead>
+        <tbody>
+        ${registros.sort((a,b)=> a.fecha<b.fecha?1:-1).slice(0,500).map(r=>`
+          <tr>
+            <td><code class="mono">${escapeHtml(r.dniOriginal)}</code></td>
+            <td>${escapeHtml(fmt(r.nombre))}</td>
+            <td>${toDisplayDate(r.fecha)}</td>
+            <td>${fmt(r.entrada)}</td>
+            <td>${fmt(r.salida)}</td>
+            <td>${(r.entrada||r.salida) ? '<span class="badge ok">Sí</span>' : '<span class="badge muted">No</span>'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:8px;">Mostrando máx. 500 filas más recientes.</p>`}
+    </div>
+  `;
+}
+
+function handleTalanaFile(input){
+  const file = input.files[0];
+  if(!file) return;
+  const msgEl = document.getElementById('talana-msg');
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const aoa = sheetToAOA(ws);
+      const headers = aoa[0].map(h=>h===null?'':h);
+      const colDni = findHeaderCol(headers, ['N° Documento','N Documento','Nro Documento','Documento']);
+      const colNombre = findHeaderCol(headers, ['Nombre']);
+      const colFecha = findHeaderCol(headers, ['Fecha']);
+      const colEntrada = findHeaderCol(headers, ['Entrada real','Entrada']);
+      const colSalida = findHeaderCol(headers, ['Salida real','Salida']);
+
+      if(colDni<0 || colFecha<0){
+        msgEl.innerHTML = `<div class="msg-box err">No se encontraron las columnas esperadas (N° Documento / Fecha) en el reporte de Talana.</div>`;
+        return;
+      }
+      let procesados=0, actualizados=0, nuevos=0;
+      for(let r=1;r<aoa.length;r++){
+        const row = aoa[r];
+        if(!row || row.every(c=>c===null||c==='')) continue;
+        const dniRaw = row[colDni];
+        if(dniRaw===null||dniRaw==='') continue;
+        const fecha = parseExcelDateCell(row[colFecha]);
+        if(!fecha) continue;
+        const dniOriginal = String(dniRaw).trim();
+        const key = dniKey(dniOriginal);
+        const mapKey = key+'|'+fecha;
+        const entrada = excelTimeCellHasValue(row[colEntrada]) ? String(row[colEntrada]) : null;
+        const salida = excelTimeCellHasValue(row[colSalida]) ? String(row[colSalida]) : null;
+        const nombre = colNombre>=0 ? row[colNombre] : null;
+        if(DB.talana[mapKey]) actualizados++; else nuevos++;
+        DB.talana[mapKey] = {dniOriginal, fecha, entrada, salida, nombre};
+        procesados++;
+      }
+      saveDB();
+      DB.historial.cargas.push({tipo:'TALANA', fecha: todayIso(), usuario:SESSION.user, detalle:`${file.name} — ${procesados} filas (${nuevos} nuevas, ${actualizados} actualizadas)`});
+      saveDB();
+      msgEl.innerHTML = `<div class="msg-box ok">Talana procesado: ${procesados} filas (${nuevos} nuevas, ${actualizados} actualizadas). La combinación DNI+Fecha nunca se duplica.</div>`;
+      renderTalana();
+    }catch(err){
+      console.error(err);
+      msgEl.innerHTML = `<div class="msg-box err">Error leyendo el archivo: ${escapeHtml(err.message)}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ==========================================================
+   FRANCOPLAN
+   ========================================================== */
+const MESES_ES = {ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:8,SETIEMBRE:9,SEPTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12};
+
+function guessMesAnioFromFilename(name){
+  const upper = name.toUpperCase();
+  for(const mesNombre in MESES_ES){
+    const idx = upper.indexOf(mesNombre);
+    if(idx>=0){
+      const rest = upper.slice(idx+mesNombre.length);
+      const m2 = rest.match(/(\d{2,4})/);
+      let anio = new Date().getFullYear();
+      if(m2){
+        anio = m2[1].length===2 ? 2000+parseInt(m2[1],10) : parseInt(m2[1],10);
+      }
+      return {mes: MESES_ES[mesNombre], anio, mesNombre};
+    }
+  }
+  return null;
+}
+
+function renderFrancoplan(){
+  const meses = Object.keys(DB.francoplan).sort();
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <h2 class="page-title">Francoplan</h2>
+    <p class="page-sub">Planificación de RR.HH. por DNI y fecha. El sistema siempre consulta Talana adicionalmente, incluso ante descansos, vacaciones, feriados, etc.</p>
+    ${SESSION.rol!=='RRHH' ? `
+    <div class="panel">
+      <h3>Cargar nuevo Francoplan</h3>
+      <input type="file" id="file-fp" accept=".xlsx,.xls" onchange="prepareFrancoplanFile(this)">
+      <div id="fp-detect" style="margin-top:10px;"></div>
+      <div id="fp-msg"></div>
+    </div>` : ''}
+    <div class="panel">
+      <h3>Versiones cargadas</h3>
+      ${meses.length===0 ? '<div class="empty">Aún no se ha cargado ningún Francoplan.</div>' : meses.map(mk=>{
+        const fp = DB.francoplan[mk];
+        return `<div style="margin-bottom:14px;">
+          <b>${escapeHtml(fp.mesLabel||mk)}</b>
+          <div class="tag-list">
+            ${fp.versions.map((v,i)=>`<span>${escapeHtml(v.rev||('v'+(i+1)))} — ${escapeHtml(v.filename)} — ${new Date(v.fechaCarga).toLocaleString('es-PE')} ${i===fp.versions.length-1?'<b>(vigente)</b>':''}</span>`).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+let pendingFPParse = null;
+
+function prepareFrancoplanFile(input){
+  const file = input.files[0];
+  if(!file) return;
+  const detectEl = document.getElementById('fp-detect');
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      const sheetName = wb.SheetNames.find(n=>n.toUpperCase()==='FP') || wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const aoa = sheetToAOA(ws);
+
+      // localizar fila de encabezado (contiene 'DNI' en alguna columna)
+      let headerRow = -1, dniCol = -1;
+      for(let r=0;r<Math.min(aoa.length,15);r++){
+        const idx = (aoa[r]||[]).findIndex(c=>(c||'').toString().trim().toUpperCase()==='DNI');
+        if(idx>=0){ headerRow=r; dniCol=idx; break; }
+      }
+      if(headerRow<0){
+        detectEl.innerHTML = `<div class="msg-box err">No se encontró una fila de encabezado con la columna "DNI" en la hoja "${escapeHtml(sheetName)}". Verifique la estructura del Francoplan.</div>`;
+        return;
+      }
+      const dayNumberRow = headerRow-1; // fila con 1,2,3...31
+      if(dayNumberRow<0 || !aoa[dayNumberRow]){
+        detectEl.innerHTML = `<div class="msg-box err">No se encontró la fila con la numeración de días (esperada justo encima del encabezado).</div>`;
+        return;
+      }
+      const dayCols = [];
+      const rowDays = aoa[dayNumberRow];
+      for(let c=dniCol+1;c<rowDays.length;c++){
+        const v = rowDays[c];
+        if(typeof v === 'number' && v>=1 && v<=31){
+          dayCols.push({col:c, day:v});
+        } else if(dayCols.length>0){
+          break; // ya pasamos la zona de dias
+        }
+      }
+      if(dayCols.length===0){
+        detectEl.innerHTML = `<div class="msg-box err">No se pudieron detectar las columnas de días (1-31) en el Francoplan.</div>`;
+        return;
+      }
+      const guess = guessMesAnioFromFilename(file.name);
+
+      pendingFPParse = {file, aoa, headerRow, dniCol, dayCols, wbSheetName:sheetName};
+
+      detectEl.innerHTML = `
+        <div class="msg-box info">
+          Detectado: hoja "${escapeHtml(sheetName)}", encabezado en fila ${headerRow+1}, ${dayCols.length} columnas de día (día ${dayCols[0].day} a ${dayCols[dayCols.length-1].day}).
+          ${guess? `Mes detectado por nombre de archivo: <b>${guess.mesNombre} ${guess.anio}</b>.` : 'No se pudo inferir el mes/año del nombre de archivo; indíquelo manualmente.'}
+        </div>
+        <div class="row">
+          <div class="field"><label>Mes</label>
+            <select id="fp-mes">
+              ${Object.keys(MESES_ES).filter((v,i,a)=>a.indexOf(v)===i).map(m=>`<option value="${MESES_ES[m]}" ${guess&&guess.mes===MESES_ES[m]?'selected':''}>${m}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Año</label><input id="fp-anio" type="number" value="${guess?guess.anio:new Date().getFullYear()}" style="width:90px;"></div>
+          <div class="field"><label>Revisión (opcional)</label><input id="fp-rev" type="text" placeholder="rev01"></div>
+          <button class="btn" onclick="confirmFrancoplanImport()">Importar Francoplan</button>
+        </div>
+      `;
+    }catch(err){
+      console.error(err);
+      detectEl.innerHTML = `<div class="msg-box err">Error leyendo el archivo: ${escapeHtml(err.message)}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function confirmFrancoplanImport(){
+  if(!pendingFPParse) return;
+  const mes = parseInt(document.getElementById('fp-mes').value,10);
+  const anio = parseInt(document.getElementById('fp-anio').value,10);
+  const rev = document.getElementById('fp-rev').value.trim();
+  const mesKey = `${anio}-${pad2(mes)}`;
+  const {aoa, headerRow, dniCol, dayCols, file} = pendingFPParse;
+
+  const data = {};
+  let filas=0, codigosDesconocidos = new Set();
+  for(let r=headerRow+1;r<aoa.length;r++){
+    const row = aoa[r];
+    if(!row) continue;
+    const dniRaw = row[dniCol];
+    if(dniRaw===null||dniRaw===undefined||dniRaw==='') continue;
+    const key = dniKey(dniRaw);
+    if(!key) continue;
+    const porFecha = {};
+    for(const dc of dayCols){
+      const val = row[dc.col];
+      if(val===null||val===undefined||val==='') continue;
+      const fecha = `${anio}-${pad2(mes)}-${pad2(dc.day)}`;
+      porFecha[fecha] = val;
+      const clasif = clasificarCodigoFP(val);
+      if(clasif.tipo==='DESCONOCIDO') codigosDesconocidos.add(String(val));
+    }
+    data[key] = porFecha;
+    filas++;
+  }
+  if(!DB.francoplan[mesKey]) DB.francoplan[mesKey] = {mesLabel: mesKey, versions:[]};
+  DB.francoplan[mesKey].versions.push({rev: rev||('v'+(DB.francoplan[mesKey].versions.length+1)), filename:file.name, fechaCarga: todayIso(), data});
+  DB.historial.cargas.push({tipo:'FRANCOPLAN', fecha: todayIso(), usuario:SESSION.user, detalle:`${file.name} (${mesKey}) — ${filas} trabajadores`});
+  saveDB();
+  pendingFPParse = null;
+  const msgEl = document.getElementById('fp-msg');
+  msgEl.innerHTML = `<div class="msg-box ok">Francoplan de ${mesKey} importado: ${filas} trabajadores. ${codigosDesconocidos.size? '<br>⚠ Códigos no reconocidos encontrados: '+[...codigosDesconocidos].map(escapeHtml).join(', ')+'. Se marcarán como alerta al procesar.':''}</div>`;
+  renderFrancoplan();
+}
+
+function clasificarCodigoFP(val){
+  if(typeof val === 'number') return {tipo:'TRABAJO'};
+  const s = String(val).trim().toUpperCase();
+  if(/^\d+$/.test(s)) return {tipo:'TRABAJO'};
+  if(s==='VA') return {tipo:'VA'};
+  if(s==='FE') return {tipo:'FE'};
+  if(s==='PSGH') return {tipo:'PSGH'};
+  if(s==='DM') return {tipo:'DM'};
+  if(s==='TL') return {tipo:'TL'};
+  // "C" = trabajador cesado; RR.HH. lo usa para completar los días posteriores a su
+  // fecha de cese hasta el fin de mes. No genera observación ni alerta: se ignora.
+  if(s==='C') return {tipo:'CESE'};
+  if(/^S\d+$/.test(s)) return {tipo:'DESCANSO'};
+  return {tipo:'DESCONOCIDO', valor:val};
+}
+
+/* ==========================================================
+   MOTOR DE VALIDACIÓN / TAREO
+   ========================================================== */
+function getFrancoplanVigenteParaFecha(iso){
+  const mesKey = iso.slice(0,7);
+  const fp = DB.francoplan[mesKey];
+  if(!fp || fp.versions.length===0) return null;
+  return fp.versions[fp.versions.length-1];
+}
+function talanaMarco(key, fecha){
+  const rec = DB.talana[key+'|'+fecha];
+  if(!rec) return false;
+  return !!(rec.entrada || rec.salida);
+}
+
+function addObservacion(tipo, dniKeyVal, dniOriginal, nombre, fecha, motivo){
+  const id = dniKeyVal+'|'+fecha+'|'+tipo;
+  // evitar duplicados de la misma alerta
+  const existe = DB.observaciones.find(o=>o.id===id);
+  if(existe){
+    existe.motivo = motivo; existe.nombre = nombre; existe.dni = dniOriginal;
+    return;
+  }
+  DB.observaciones.push({
+    id, dniKey:dniKeyVal, dni:dniOriginal, nombre, fecha, tipo, motivo,
+    estado: tipo==='RRHH' ? 'PENDIENTE' : 'INFORMATIVA',
+    codigoReg:null, usuarioReg:null, fechaHoraReg:null
+  });
+}
+
+function procesarRango(fechaIniIso, fechaFinIso){
+  const ini = new Date(fechaIniIso+'T00:00:00');
+  const fin = new Date(fechaFinIso+'T00:00:00');
+  if(fin<ini) return {error:'El rango de fechas es inválido.'};
+
+  let dias=0, correctos=0, obsRRHH=0, alertasAdmin=0, ignorados=0;
+
+  for(let d=new Date(ini); d<=fin; d.setDate(d.getDate()+1)){
+    const iso = isoDate(d);
+    dias++;
+    const fpVersion = getFrancoplanVigenteParaFecha(iso);
+    const candidateKeys = new Set(Object.keys(DB.trabajadores));
+    if(fpVersion) Object.keys(fpVersion.data).forEach(k=>candidateKeys.add(k));
+    Object.values(DB.talana).filter(r=>r.fecha===iso).forEach(r=>candidateKeys.add(dniKey(r.dniOriginal)));
+
+    for(const key of candidateKeys){
+      const trabajador = DB.trabajadores[key];
+      const tareoKey = key+'|'+iso;
+
+      // Si el Francoplan marca "C" (relleno posterior al cese), se ignora directamente,
+      // sin importar si el trabajador ya no figura en el padrón vigente o está fuera de
+      // vigencia: no debe generar observación ni alerta.
+      const fcValPrelim = fpVersion?.data?.[key]?.[iso];
+      if(fcValPrelim!==undefined && clasificarCodigoFP(fcValPrelim).tipo==='CESE'){
+        ignorados++;
+        DB.tareo[tareoKey] = {dni: trabajador?trabajador.dniOriginal:key, nombre: trabajador?trabajador.nombre:'', fecha:iso, fcCode:fcValPrelim, estado:'IGNORADO', motivo:'Relleno posterior al cese (código C)'};
+        continue;
+      }
+
+      if(!trabajador){
+        const talanaRec = Object.values(DB.talana).find(r=>r.fecha===iso && dniKey(r.dniOriginal)===key);
+        const dniOriginal = talanaRec? talanaRec.dniOriginal : key;
+        const nombre = talanaRec? talanaRec.nombre : '(desconocido)';
+        addObservacion('ADMIN', key, dniOriginal, nombre||'(desconocido)', iso, 'Trabajador no encontrado en padrón');
+        DB.tareo[tareoKey] = {dni:dniOriginal, nombre, fecha:iso, estado:'ALERTA_ADMIN', motivo:'Trabajador no encontrado en padrón'};
+        alertasAdmin++;
+        continue;
+      }
+      const vinculo = findVinculoVigente(trabajador, d);
+      if(!vinculo){
+        ignorados++;
+        continue; // fuera de vigencia: se ignora sin generar observacion
+      }
+      if(!fpVersion || !(key in fpVersion.data) || !(iso in fpVersion.data[key])){
+        addObservacion('ADMIN', key, trabajador.dniOriginal, trabajador.nombre, iso, 'Trabajador no incluido en Francoplan');
+        DB.tareo[tareoKey] = {dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:iso, estado:'ALERTA_ADMIN', motivo:'Trabajador no incluido en Francoplan'};
+        alertasAdmin++;
+        continue;
+      }
+      const fcVal = fpVersion.data[key][iso];
+      const clasif = clasificarCodigoFP(fcVal);
+      if(clasif.tipo==='DESCONOCIDO'){
+        addObservacion('ADMIN', key, trabajador.dniOriginal, trabajador.nombre, iso, `Se encontró un código de Francoplan no reconocido: ${fcVal}`);
+        DB.tareo[tareoKey] = {dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:iso, estado:'ALERTA_ADMIN', motivo:`Código de Francoplan no reconocido: ${fcVal}`};
+        alertasAdmin++;
+        continue;
+      }
+      const marco = talanaMarco(key, iso);
+      const cargo = (vinculo.cargo||'').trim().toUpperCase();
+      const resultado = aplicarReglasConversion(clasif.tipo, marco, cargo);
+
+      if(resultado.estado==='CORRECTO'){
+        DB.tareo[tareoKey] = {dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:iso, fcCode:fcVal, marco, estado:'CORRECTO', marca:resultado.marca, proyecto:vinculo.proyecto, item:vinculo.item, cargo};
+        correctos++;
+      } else {
+        addObservacion('RRHH', key, trabajador.dniOriginal, trabajador.nombre, iso, resultado.motivo);
+        DB.tareo[tareoKey] = {dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:iso, fcCode:fcVal, marco, estado:'OBSERVACION_RRHH', motivo:resultado.motivo, proyecto:vinculo.proyecto, item:vinculo.item, cargo};
+        obsRRHH++;
+        // Si esta observación definitiva viene de una alerta de marcación preventiva que
+        // seguía pendiente, se enlazan (no se duplican): la alerta queda anotada como
+        // convertida en observación, sin dejar de mostrar su propio historial.
+        if(resultado.motivo === 'SIN MARCACIÓN'){
+          const am = DB.alertasMarcacion[tareoKey];
+          if(am && am.estado==='PENDIENTE'){
+            am.observacionVinculada = true;
+            am.fechaObservacionVinculada = todayIso();
+          }
+        }
+      }
+    }
+  }
+  saveDB();
+  DB.historial.procesos.push({fecha: todayIso(), usuario:SESSION.user, rango:`${fechaIniIso} — ${fechaFinIso}`, correctos, obsRRHH, alertasAdmin, ignorados});
+  saveDB();
+  return {dias, correctos, obsRRHH, alertasAdmin, ignorados};
+}
+
+/* CASO 1 (ampliado): Francoplan=trabajo + Talana=sin marcación genera observación "SIN MARCACIÓN".
+   RR.HH. puede regularizarla con "OLVIDÓ MARCAR" (ver marcaParaOlvidoMarcar/confirmRegularizacion),
+   lo cual NO es falta: genera marca 10 (o 12 si PERSONAL DE SEGURIDAD) como si hubiera marcado. */
+function aplicarReglasConversion(tipo, marco, cargo){
+  const esSeguridad = cargo === 'PERSONAL DE SEGURIDAD';
+  switch(tipo){
+    case 'TRABAJO':
+      return marco ? {estado:'CORRECTO', marca: esSeguridad?'12':'10'} : {estado:'OBSERVACION_RRHH', motivo:'SIN MARCACIÓN'};
+    case 'DESCANSO':
+      return !marco ? {estado:'CORRECTO', marca:'DL'} : {estado:'OBSERVACION_RRHH', motivo:'MARCACIÓN EN DESCANSO'};
+    case 'VA':
+      return !marco ? {estado:'CORRECTO', marca:'VA'} : {estado:'OBSERVACION_RRHH', motivo:'MARCACIÓN EN VACACIONES'};
+    case 'FE':
+      return !marco ? {estado:'CORRECTO', marca:'FE'} : {estado:'OBSERVACION_RRHH', motivo:'MARCACIÓN EN FERIADO'};
+    case 'PSGH':
+      return !marco ? {estado:'CORRECTO', marca:'P1'} : {estado:'OBSERVACION_RRHH', motivo:'MARCACIÓN EN PSGH'};
+    case 'DM':
+      return !marco ? {estado:'CORRECTO', marca:'DM'} : {estado:'OBSERVACION_RRHH', motivo:'MARCACIÓN EN DM'};
+    case 'TL':
+      return !marco ? {estado:'CORRECTO', marca:'TL'} : {estado:'OBSERVACION_RRHH', motivo:'MARCACIÓN EN TL'};
+  }
+  return {estado:'OBSERVACION_RRHH', motivo:'Caso no contemplado'};
+}
+
+/* ==========================================================
+   ALERTAS DE MARCACIÓN (control preventivo, durante el día)
+   ==========================================================
+   Distinto de las observaciones definitivas de RR.HH.: esto se corre varias veces
+   al día (p.ej. cargando Talana a mediodía) para avisar al trabajador A TIEMPO,
+   antes del cierre del tareo. No modifica el motor principal ni sus reglas.
+*/
+function procesarAlertasMarcacion(fechaIso){
+  const d = new Date(fechaIso+'T00:00:00');
+  const fpVersion = getFrancoplanVigenteParaFecha(fechaIso);
+  let generadas=0, resueltas=0, sinCambio=0;
+
+  for(const key of Object.keys(DB.trabajadores)){
+    const trabajador = DB.trabajadores[key];
+    const vinculo = findVinculoVigente(trabajador, d);
+    if(!vinculo) continue; // fuera de vigencia (antes de ingreso o después de cese): no alertar
+
+    if(!fpVersion || !(key in fpVersion.data) || !(fechaIso in fpVersion.data[key])){
+      // no está en el Francoplan: no se alerta al trabajador, pero sí se informa a Administración
+      addObservacion('ADMIN', key, trabajador.dniOriginal, trabajador.nombre, fechaIso, 'Trabajador no incluido en Francoplan');
+      continue;
+    }
+    const fcVal = fpVersion.data[key][fechaIso];
+    const clasif = clasificarCodigoFP(fcVal);
+    if(clasif.tipo!=='TRABAJO') continue; // descanso, VA, FE, PSGH, DM, TL, C o desconocido: no aplica alerta preventiva
+
+    const marco = talanaMarco(key, fechaIso);
+    const amKey = key+'|'+fechaIso;
+    const existente = DB.alertasMarcacion[amKey];
+
+    if(marco){
+      if(existente && existente.estado==='PENDIENTE'){
+        existente.estado = 'RESUELTA';
+        existente.fechaHoraResolucion = todayIso();
+        resueltas++;
+      }
+      continue;
+    }
+    // sigue sin marcar
+    if(!existente){
+      DB.alertasMarcacion[amKey] = {
+        dniKey:key, dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:fechaIso,
+        estado:'PENDIENTE', canal:'CORREO', correo: trabajador.correo||null,
+        notificado: !!trabajador.correo, fechaHoraNotificacion: todayIso(),
+        fechaHoraResolucion:null, observacionVinculada:false
+      };
+      generadas++;
+    } else {
+      sinCambio++; // ya estaba notificado: NO reenviar la alerta
+    }
+  }
+  saveDB();
+  return {generadas, resueltas, sinCambio};
+}
+
+function mensajeAlertaMarcacion(nombre){
+  const primerNombre = (nombre||'').trim().split(/\s+/)[0] || '';
+  return {
+    asunto: 'Alerta de marcación de asistencia',
+    cuerpo: `Hola ${primerNombre},\n\nDurante la revisión de asistencia se ha detectado que actualmente no figura una marcación correspondiente al día de hoy.\n\nPor favor, verifica tu marcación y regularízala según corresponda.\n\nSi ya realizaste tu marcación, puedes ignorar este mensaje.\n\nSaludos.`
+  };
+}
+function mailtoAlertaMarcacion(a){
+  if(!a.correo) return null;
+  const m = mensajeAlertaMarcacion(a.nombre);
+  return `mailto:${encodeURIComponent(a.correo)}?subject=${encodeURIComponent(m.asunto)}&body=${encodeURIComponent(m.cuerpo)}`;
+}
+function escalarAlerta(amKey){
+  const a = DB.alertasMarcacion[amKey];
+  if(!a || a.estado!=='PENDIENTE') return;
+  a.estado = 'ESCALADA';
+  a.fechaHoraEscalada = todayIso();
+  saveDB();
+  renderAlertasMarcacion();
+}
+
+function renderAlertasMarcacion(){
+  const hoyIso = isoDate(new Date());
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <h2 class="page-title">📢 Alertas de marcación</h2>
+    <p class="page-sub">Control preventivo durante el día: avisa a quien debía trabajar y aún no registra marcación en Talana. No reemplaza ni duplica la observación definitiva de RR.HH. — esta se genera solo cuando se ejecuta el procesamiento del tareo (pestaña "Tareo").</p>
+    <div class="panel">
+      <h3>1. Cargar reporte de marcas del mediodía</h3>
+      <p style="font-size:12px;color:var(--muted); margin-top:-4px;">Este es el "listado de marcas" (una fila por marcación, con Entrada/Salida) — distinto del reporte que usas en la pestaña "Talana". Solo se toman en cuenta las filas marcadas como <b>Entrada</b>; las de Salida se ignoran para esta detección preventiva.</p>
+      <input type="file" id="file-marcas" accept=".xlsx,.xls" onchange="handleMarcasFile(this)">
+      <div id="marcas-msg" style="margin-top:12px;"></div>
+    </div>
+    <div class="panel">
+      <h3>2. Detectar alertas</h3>
+      <div class="row">
+        <div class="field"><label>Fecha a revisar</label><input type="date" id="am-fecha" value="${hoyIso}"></div>
+        <button class="btn" onclick="handleProcesarAlertas()">Detectar alertas</button>
+      </div>
+      <p style="font-size:11.8px;color:var(--muted); margin-top:8px;">Puedes repetir esto varias veces al día, cargando de nuevo el reporte de marcas cada vez: no se reenvían alertas ya notificadas, y las que ya tienen marcación pasan automáticamente a "Resuelta". (También puedes usar aquí un Talana ya cargado desde la pestaña "Talana", si lo prefieres.)</p>
+      <div id="am-msg" style="margin-top:12px;"></div>
+    </div>
+    <div class="panel" id="am-tabla-panel">
+      ${renderTablaAlertas()}
+    </div>
+  `;
+}
+function handleMarcasFile(input){
+  const file = input.files[0];
+  if(!file) return;
+  const msgEl = document.getElementById('marcas-msg');
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const aoa = sheetToAOA(ws);
+
+      // localizar la fila de encabezado buscando una columna tipo "N° Documento"
+      let headerRow=-1, colDni=-1;
+      for(let r=0;r<Math.min(aoa.length,15);r++){
+        const idx = (aoa[r]||[]).findIndex(c=>/documento/i.test((c||'').toString()));
+        if(idx>=0){ headerRow=r; colDni=idx; break; }
+      }
+      if(headerRow<0){
+        msgEl.innerHTML = `<div class="msg-box err">No se encontró una columna de documento/DNI en este archivo. Verifica que sea el "listado de marcas".</div>`;
+        return;
+      }
+      const headers = aoa[headerRow];
+      const colFecha = findHeaderCol(headers, ['Fecha']);
+      const colNombre = findHeaderCol(headers, ['Nombre']);
+      const colHora = findHeaderCol(headers, ['Hora']);
+      if(colFecha<0){
+        msgEl.innerHTML = `<div class="msg-box err">No se encontró la columna "Fecha" en este archivo.</div>`;
+        return;
+      }
+      // detectar la columna que trae "Entrada"/"Salida" por su CONTENIDO, no por el
+      // nombre de encabezado (en este formato viene mal rotulada, p.ej. como "Dirección")
+      let colTipo=-1, mejorConteo=0;
+      for(let c=0;c<headers.length;c++){
+        let conteo=0;
+        for(let r=headerRow+1; r<Math.min(aoa.length, headerRow+40); r++){
+          const v = (aoa[r]?.[c]||'').toString().trim().toLowerCase();
+          if(v==='entrada' || v==='salida') conteo++;
+        }
+        if(conteo>mejorConteo){ mejorConteo=conteo; colTipo=c; }
+      }
+      if(colTipo<0){
+        msgEl.innerHTML = `<div class="msg-box err">No se pudo identificar la columna que indica "Entrada" o "Salida" en este archivo.</div>`;
+        return;
+      }
+
+      let entradasNuevas=0, entradasActualizadas=0, salidasIgnoradas=0, fechasVistas=new Set();
+      for(let r=headerRow+1; r<aoa.length; r++){
+        const row = aoa[r];
+        if(!row || !row[colDni]) continue;
+        const tipo = (row[colTipo]||'').toString().trim().toLowerCase();
+        const fecha = parseExcelDateCell(row[colFecha]);
+        if(!fecha) continue;
+        if(tipo!=='entrada'){ if(tipo==='salida') salidasIgnoradas++; continue; }
+        fechasVistas.add(fecha);
+        const dniOriginal = String(row[colDni]).trim();
+        const key = dniKey(dniOriginal)+'|'+fecha;
+        const hora = colHora>=0 ? row[colHora] : null;
+        if(DB.talana[key]){
+          if(!DB.talana[key].entrada){ DB.talana[key].entrada = hora || true; entradasActualizadas++; }
+        } else {
+          DB.talana[key] = {dniOriginal, fecha, entrada: hora || true, salida:null, nombre: colNombre>=0?row[colNombre]:null};
+          entradasNuevas++;
+        }
+      }
+      saveDB();
+      DB.historial.cargas.push({tipo:'TALANA', fecha: todayIso(), usuario:SESSION.user, detalle:`${file.name} — listado de marcas: ${entradasNuevas+entradasActualizadas} entradas registradas, ${salidasIgnoradas} filas de salida ignoradas`});
+      saveDB();
+      const fechaTexto = [...fechasVistas].sort().map(toDisplayDate).join(', ') || '—';
+      msgEl.innerHTML = `<div class="msg-box ok">Listado de marcas procesado: ${entradasNuevas} entrada(s) nueva(s), ${entradasActualizadas} ya existían, ${salidasIgnoradas} fila(s) de salida ignoradas (fecha(s): ${fechaTexto}). Ya puedes presionar "Detectar alertas".</div>`;
+    }catch(err){
+      console.error(err);
+      msgEl.innerHTML = `<div class="msg-box err">Error leyendo el archivo: ${escapeHtml(err.message)}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function renderTablaAlertas(){
+  const registros = Object.values(DB.alertasMarcacion).sort((a,b)=> a.fecha<b.fecha?1:-1);
+  if(registros.length===0) return `<div class="empty">Aún no se ha detectado ninguna alerta de marcación.</div>`;
+  return `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Estado</th><th>Notificación</th><th>Acciones</th></tr></thead>
+      <tbody>
+      ${registros.map(a=>{
+        let badge;
+        if(a.estado==='PENDIENTE') badge = '<span class="badge warn">🟡 Pendiente</span>';
+        else if(a.estado==='RESUELTA') badge = '<span class="badge ok">🟢 Resuelta</span>';
+        else badge = '<span class="badge danger">🔴 Escalada</span>';
+        const mailto = mailtoAlertaMarcacion(a);
+        const notif = a.notificado
+          ? (mailto ? `Correo listo — <a href="${mailto}" target="_blank">abrir en Outlook</a>` : 'Correo enviado')
+          : '<span style="color:var(--danger)">Sin correo registrado (ver pestaña Padrón)</span>';
+        const amKey = a.dniKey+'|'+a.fecha;
+        return `<tr>
+          <td>${toDisplayDate(a.fecha)}</td>
+          <td><code class="mono">${escapeHtml(a.dni)}</code></td>
+          <td>${escapeHtml(a.nombre)}</td>
+          <td>${badge}${a.observacionVinculada?' <span style="font-size:11px;color:var(--muted)">(ya generó observación RR.HH.)</span>':''}</td>
+          <td style="white-space:normal;">${notif}</td>
+          <td>${a.estado==='PENDIENTE' ? `<button class="btn small secondary" onclick="escalarAlerta('${amKey}')">Marcar como escalada</button>` : '—'}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table></div>
+  `;
+}
+function handleProcesarAlertas(){
+  const fecha = document.getElementById('am-fecha').value;
+  const msgEl = document.getElementById('am-msg');
+  if(!fecha){ msgEl.innerHTML = `<div class="msg-box err">Selecciona una fecha.</div>`; return; }
+  if(Object.keys(DB.trabajadores).length===0){ msgEl.innerHTML = `<div class="msg-box err">Debe cargar el padrón antes de detectar alertas.</div>`; return; }
+  const res = procesarAlertasMarcacion(fecha);
+  msgEl.innerHTML = `<div class="msg-box ok">${res.generadas} alerta(s) nueva(s) generada(s), ${res.resueltas} resuelta(s) por nueva marcación, ${res.sinCambio} ya estaban notificadas (no se reenviaron).</div>`;
+  document.getElementById('am-tabla-panel').innerHTML = renderTablaAlertas();
+}
+
+function renderTareo(){
+  const registros = Object.values(DB.tareo).sort((a,b)=> a.fecha<b.fecha?1:-1);
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <h2 class="page-title">Procesar Tareo</h2>
+    <p class="page-sub">Ejecuta el motor de validación sobre un rango de fechas usando el padrón, francoplan y talana ya cargados.</p>
+    <div class="panel">
+      <h3>Procesar rango</h3>
+      <div class="row">
+        <div class="field"><label>Desde</label><input type="date" id="proc-ini"></div>
+        <div class="field"><label>Hasta</label><input type="date" id="proc-fin"></div>
+        <button class="btn" onclick="handleProcesar()">Procesar</button>
+      </div>
+      <div id="proc-msg" style="margin-top:12px;"></div>
+    </div>
+    <div class="panel">
+      <h3>Filtros</h3>
+      <div class="row">
+        <div class="field"><label>DNI</label><input id="ft-dni" oninput="applyTareoFilter()"></div>
+        <div class="field"><label>Trabajador</label><input id="ft-nombre" oninput="applyTareoFilter()"></div>
+        <div class="field"><label>Estado</label>
+          <select id="ft-estado" onchange="applyTareoFilter()">
+            <option value="">Todos</option>
+            <option value="CORRECTO">Correcto</option>
+            <option value="REGULARIZADO">Regularizado</option>
+            <option value="OBSERVACION_RRHH">Observación RR.HH.</option>
+            <option value="ALERTA_ADMIN">Alerta Administración</option>
+            <option value="IGNORADO">Ignorado (código C)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Registros de tareo (${registros.length})</h3>
+      <div class="table-wrap"><table id="tareo-table">
+        <thead><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Francoplan</th><th>Marcó Talana</th><th>Resultado</th><th>Estado</th></tr></thead>
+        <tbody>${renderTareoRows(registros)}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+function renderTareoRows(registros){
+  if(registros.length===0) return `<tr><td colspan="7" class="empty">Aún no se ha procesado ningún rango.</td></tr>`;
+  return registros.slice(0,1000).map(r=>{
+    let badge;
+    if(r.estado==='CORRECTO') badge = `<span class="badge ok">Correcto</span>`;
+    else if(r.estado==='REGULARIZADO') badge = `<span class="badge ok">Regularizado</span>`;
+    else if(r.estado==='OBSERVACION_RRHH') badge = `<span class="badge warn">Obs. RR.HH.</span>`;
+    else if(r.estado==='IGNORADO') badge = `<span class="badge muted">Ignorado</span>`;
+    else badge = `<span class="badge danger">Alerta Admin.</span>`;
+    const resultadoTxt = r.estado==='REGULARIZADO'
+      ? `${fmt(r.marca)} (${escapeHtml(r.justificacionReg||'')}${r.observacionOriginal? ' — antes: '+escapeHtml(r.observacionOriginal):''})`
+      : (fmt(r.marca) || fmt(r.motivo));
+    return `<tr>
+      <td>${toDisplayDate(r.fecha)}</td>
+      <td><code class="mono">${escapeHtml(r.dni)}</code></td>
+      <td>${escapeHtml(r.nombre)}</td>
+      <td>${fmt(r.fcCode)}</td>
+      <td>${r.marco===undefined?'—':(r.marco?'Sí':'No')}</td>
+      <td>${resultadoTxt}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+function applyTareoFilter(){
+  const dni = document.getElementById('ft-dni').value.trim().toLowerCase();
+  const nombre = document.getElementById('ft-nombre').value.trim().toLowerCase();
+  const estado = document.getElementById('ft-estado').value;
+  let registros = Object.values(DB.tareo).sort((a,b)=> a.fecha<b.fecha?1:-1);
+  if(dni) registros = registros.filter(r=>String(r.dni).toLowerCase().includes(dni));
+  if(nombre) registros = registros.filter(r=>String(r.nombre).toLowerCase().includes(nombre));
+  if(estado) registros = registros.filter(r=>r.estado===estado);
+  document.querySelector('#tareo-table tbody').innerHTML = renderTareoRows(registros);
+}
+function handleProcesar(){
+  const ini = document.getElementById('proc-ini').value;
+  const fin = document.getElementById('proc-fin').value;
+  const msgEl = document.getElementById('proc-msg');
+  if(!ini || !fin){ msgEl.innerHTML = `<div class="msg-box err">Seleccione un rango de fechas.</div>`; return; }
+  if(Object.keys(DB.trabajadores).length===0){ msgEl.innerHTML = `<div class="msg-box err">Debe cargar el padrón antes de procesar.</div>`; return; }
+  const res = procesarRango(ini, fin);
+  if(res.error){ msgEl.innerHTML = `<div class="msg-box err">${res.error}</div>`; return; }
+  msgEl.innerHTML = `<div class="msg-box ok">Procesado ${res.dias} día(s): ${res.correctos} correctos, ${res.obsRRHH} observaciones para RR.HH., ${res.alertasAdmin} alertas para Administración, ${res.ignorados} registros ignorados por vigencia.</div>`;
+  renderTareo();
+}
+
+/* ==========================================================
+   OBSERVACIONES
+   ========================================================== */
+function renderObservaciones(){
+  const rrhh = DB.observaciones.filter(o=>o.tipo==='RRHH').sort((a,b)=> a.fecha<b.fecha?1:-1);
+  const admin = DB.observaciones.filter(o=>o.tipo==='ADMIN').sort((a,b)=> a.fecha<b.fecha?1:-1);
+  const main = document.getElementById('main');
+
+  const rrhhRows = rrhh.map(o=>`
+    <tr>
+      <td>${toDisplayDate(o.fecha)}</td>
+      <td><code class="mono">${escapeHtml(o.dni)}</code></td>
+      <td>${escapeHtml(o.nombre)}</td>
+      <td>${escapeHtml(o.motivo)}</td>
+      <td>${o.estado==='PENDIENTE' ? '<span class="badge warn">Pendiente</span>' : `<span class="badge ok">Regularizada — ${escapeHtml(o.justificacion||o.codigoReg)}${o.codigoReg==='OLVIDO_MARCAR' ? ' (marca '+escapeHtml(o.marcaResultante)+')' : ''}</span>`}</td>
+      <td>${o.estado==='PENDIENTE' ? `<button class="btn small" onclick='openModalReg(${JSON.stringify(o.id)})'>Regularizar</button>` : `<span style="font-size:11.5px;color:var(--muted)">${escapeHtml(o.usuarioReg)} · ${new Date(o.fechaHoraReg).toLocaleString('es-PE')}</span>`}</td>
+    </tr>`).join('');
+
+  main.innerHTML = `
+    <h2 class="page-title">Observaciones</h2>
+    <p class="page-sub">${SESSION.rol==='RRHH' ? 'Revise y regularice las observaciones pendientes. No se administran archivos desde aquí.' : 'Observaciones para RR.HH. y alertas para Administración.'}</p>
+
+    <div class="panel">
+      <h3>Observaciones para RR.HH. (${rrhh.filter(o=>o.estado==='PENDIENTE').length} pendientes de ${rrhh.length})</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Situación</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${rrhh.length? rrhhRows : `<tr><td colspan="6" class="empty">No hay observaciones para RR.HH.</td></tr>`}</tbody>
+      </table></div>
+    </div>
+
+    ${SESSION.rol!=='RRHH' ? `
+    <div class="panel">
+      <h3>Alertas para Administración (${admin.length})</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Motivo</th></tr></thead>
+        <tbody>${admin.length? admin.map(o=>`
+          <tr><td>${toDisplayDate(o.fecha)}</td><td><code class="mono">${escapeHtml(o.dni)}</code></td><td>${escapeHtml(o.nombre)}</td><td>${escapeHtml(o.motivo)}</td></tr>
+        `).join('') : `<tr><td colspan="4" class="empty">No hay alertas para Administración.</td></tr>`}</tbody>
+      </table></div>
+    </div>` : ''}
+  `;
+}
+
+// Códigos de justificación estándar (siempre disponibles)
+const CODIGOS_REGULARIZACION = [
+  {value:'DL', label:'DL — Descanso'},
+  {value:'VA', label:'VA — Vacaciones'},
+  {value:'FE', label:'FE — Feriado'},
+  {value:'P1', label:'P1 — Permiso sin goce'},
+  {value:'DM', label:'DM — Descanso médico'},
+  {value:'TL', label:'TL — Teletrabajo'},
+];
+// "Olvidó marcar" solo aplica cuando la observación original es exactamente "SIN MARCACIÓN"
+// (Francoplan = día de trabajo + Talana = sin marcación). No debe ofrecerse para ningún otro motivo.
+function motivoPermiteOlvidoMarcar(motivo){
+  return motivo === 'SIN MARCACIÓN';
+}
+
+let obsIdActual = null;
+function openModalReg(id){
+  obsIdActual = id;
+  const o = DB.observaciones.find(x=>x.id===id);
+  document.getElementById('modal-reg-info').innerHTML = `<b>${escapeHtml(o.nombre)}</b> (${escapeHtml(o.dni)})<br>${toDisplayDate(o.fecha)} — Observación original: ${escapeHtml(o.motivo)}`;
+
+  const sel = document.getElementById('modal-reg-codigo');
+  let opciones = '';
+  if(motivoPermiteOlvidoMarcar(o.motivo)){
+    opciones += `<option value="OLVIDO_MARCAR">OLVIDÓ MARCAR — sí trabajó, marca válida</option>`;
+  }
+  opciones += CODIGOS_REGULARIZACION.map(c=>`<option value="${c.value}">${c.label}</option>`).join('');
+  sel.innerHTML = opciones;
+  updateModalRegPreview();
+  document.getElementById('modal-reg').style.display='flex';
+}
+function closeModalReg(){ document.getElementById('modal-reg').style.display='none'; obsIdActual=null; }
+
+function marcaParaOlvidoMarcar(){
+  const o = DB.observaciones.find(x=>x.id===obsIdActual);
+  if(!o) return '10';
+  const tr = DB.tareo[o.dniKey+'|'+o.fecha];
+  const cargo = tr && tr.cargo ? tr.cargo.trim().toUpperCase() : '';
+  return cargo === 'PERSONAL DE SEGURIDAD' ? '12' : '10';
+}
+function updateModalRegPreview(){
+  const codigo = document.getElementById('modal-reg-codigo').value;
+  const preview = document.getElementById('modal-reg-preview');
+  if(codigo==='OLVIDO_MARCAR'){
+    preview.textContent = `Se registrará como día trabajado (marca ${marcaParaOlvidoMarcar()}) y NO como falta.`;
+  } else {
+    preview.textContent = '';
+  }
+}
+
+function confirmRegularizacion(){
+  const codigo = document.getElementById('modal-reg-codigo').value;
+  const o = DB.observaciones.find(x=>x.id===obsIdActual);
+  if(!o) return;
+
+  const tareoKey = o.dniKey+'|'+o.fecha;
+  const tr = DB.tareo[tareoKey];
+  const observacionOriginal = o.motivo;
+  let marcaResultante, justificacion;
+
+  if(codigo==='OLVIDO_MARCAR'){
+    marcaResultante = marcaParaOlvidoMarcar();
+    justificacion = 'Olvidó marcar';
+  } else {
+    marcaResultante = codigo;
+    justificacion = CODIGOS_REGULARIZACION.find(c=>c.value===codigo)?.label || codigo;
+  }
+
+  o.estado = 'REGULARIZADA';
+  o.codigoReg = codigo;
+  o.justificacion = justificacion;
+  o.marcaResultante = marcaResultante;
+  o.observacionOriginal = observacionOriginal;
+  o.usuarioReg = SESSION.user;
+  o.fechaHoraReg = todayIso();
+
+  if(tr){
+    tr.observacionOriginal = observacionOriginal;
+    tr.estado = 'REGULARIZADO';
+    tr.marca = marcaResultante;
+    tr.justificacionReg = justificacion;
+    tr.motivo = undefined;
+  }
+  DB.historial.procesos.push({fecha: todayIso(), usuario:SESSION.user, rango:`Regularización ${o.dni} ${o.fecha} — ${justificacion}`, correctos:0, obsRRHH:0, alertasAdmin:0, ignorados:0, tipo:'REGULARIZACION'});
+  saveDB();
+  closeModalReg();
+  renderObservaciones();
+}
+
+/* ==========================================================
+   GENERAR TXT
+   ========================================================== */
+function renderTxt(){
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <h2 class="page-title">Generar TXT para Hapiqa</h2>
+    <p class="page-sub">Formato: DNI | Proyecto | Item | Fecha | Marca | D. Solo entran registros correctos o regularizados por RR.HH.</p>
+    <div class="panel">
+      <h3>Seleccionar rango</h3>
+      <div class="row">
+        <div class="field"><label>Desde</label><input type="date" id="txt-ini"></div>
+        <div class="field"><label>Hasta</label><input type="date" id="txt-fin"></div>
+        <button class="btn" onclick="generarTxt()">Generar TXT</button>
+      </div>
+      <div id="txt-msg" style="margin-top:12px;"></div>
+    </div>
+    <div class="panel hidden" id="txt-preview-panel">
+      <h3>Vista previa</h3>
+      <div class="table-wrap" style="max-height:340px;"><pre id="txt-preview" style="font-family:var(--mono); font-size:12.3px; margin:0; padding:10px; white-space:pre-wrap;"></pre></div>
+      <div style="margin-top:12px;"><button class="btn" onclick="descargarTxt()">Descargar .TXT</button></div>
+    </div>
+  `;
+}
+let lastTxtContent = null, lastTxtName = null;
+function generarTxt(){
+  const ini = document.getElementById('txt-ini').value;
+  const fin = document.getElementById('txt-fin').value;
+  const msgEl = document.getElementById('txt-msg');
+  if(!ini||!fin){ msgEl.innerHTML = `<div class="msg-box err">Seleccione un rango de fechas.</div>`; return; }
+
+  const lineas = [];
+  let excluidosSinProyecto = 0, excluidosPendientes=0;
+  const registros = Object.values(DB.tareo).filter(r=> r.fecha>=ini && r.fecha<=fin);
+  for(const r of registros){
+    if(r.estado!=='CORRECTO' && r.estado!=='REGULARIZADO'){
+      if(r.estado==='OBSERVACION_RRHH') excluidosPendientes++;
+      continue;
+    }
+    if(!r.proyecto || !r.item){ excluidosSinProyecto++; continue; }
+    lineas.push(`${r.dni}|${r.proyecto}|${r.item}|${toDisplayDate(r.fecha)}|${r.marca}|D`);
+  }
+  if(lineas.length===0){
+    msgEl.innerHTML = `<div class="msg-box err">No hay registros válidos para generar el TXT en ese rango (verifique que haya procesado el tareo primero).</div>`;
+    document.getElementById('txt-preview-panel').classList.add('hidden');
+    return;
+  }
+  lastTxtContent = lineas.join('\n');
+  lastTxtName = `TAREO_${ini}_${fin}.txt`;
+  document.getElementById('txt-preview').textContent = lastTxtContent;
+  document.getElementById('txt-preview-panel').classList.remove('hidden');
+  msgEl.innerHTML = `<div class="msg-box ok">${lineas.length} registros listos. Excluidos: ${excluidosPendientes} con observación pendiente, ${excluidosSinProyecto} sin proyecto/ítem.</div>`;
+
+  DB.historial.txts.push({fecha: todayIso(), usuario:SESSION.user, rango:`${ini} — ${fin}`, cantidad: lineas.length, archivo: lastTxtName});
+  saveDB();
+}
+function descargarTxt(){
+  if(!lastTxtContent) return;
+  const blob = new Blob([lastTxtContent], {type:'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = lastTxtName;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ==========================================================
+   HISTORIAL
+   ========================================================== */
+function renderHistorial(){
+  const main = document.getElementById('main');
+  const cargas = [...DB.historial.cargas].reverse();
+  const procesos = [...DB.historial.procesos].reverse();
+  const txts = [...DB.historial.txts].reverse();
+  main.innerHTML = `
+    <h2 class="page-title">Historial</h2>
+    ${SESSION.rol!=='RRHH' ? `
+    <div class="panel">
+      <h3>💾 Copia de seguridad</h3>
+      <p style="font-size:12.8px;color:var(--muted)">Toda la información de este sistema se guarda únicamente en este navegador. Si se borra el caché, se reinstala el navegador o se usa otra computadora, esa información se pierde. Descarga una copia periódicamente (por ejemplo, guárdala en OneDrive) y podrás restaurarla cuando la necesites.</p>
+      <div class="row">
+        <button class="btn" onclick="descargarBackup()">Descargar copia de seguridad</button>
+        <div class="field">
+          <label>Restaurar desde un archivo de copia</label>
+          <input type="file" id="file-restore" accept=".json" onchange="handleRestoreFile(this)">
+        </div>
+      </div>
+      <div id="backup-msg" style="margin-top:12px;"></div>
+    </div>` : ''}
+    <div class="panel">
+      <h3>Cargas de archivos</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Usuario</th><th>Detalle</th></tr></thead>
+        <tbody>${cargas.length? cargas.map(c=>`<tr><td>${new Date(c.fecha).toLocaleString('es-PE')}</td><td>${c.tipo}</td><td>${escapeHtml(c.usuario)}</td><td>${escapeHtml(c.detalle)}</td></tr>`).join('') : `<tr><td colspan="4" class="empty">Sin registros.</td></tr>`}</tbody>
+      </table></div>
+    </div>
+    <div class="panel">
+      <h3>Procesamientos y regularizaciones</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Fecha</th><th>Usuario</th><th>Rango</th><th>Correctos</th><th>Obs. RR.HH.</th><th>Alertas Admin.</th></tr></thead>
+        <tbody>${procesos.length? procesos.map(p=>`<tr><td>${new Date(p.fecha).toLocaleString('es-PE')}</td><td>${escapeHtml(p.usuario)}</td><td>${escapeHtml(p.rango)}</td><td>${p.correctos}</td><td>${p.obsRRHH}</td><td>${p.alertasAdmin}</td></tr>`).join('') : `<tr><td colspan="6" class="empty">Sin registros.</td></tr>`}</tbody>
+      </table></div>
+    </div>
+    <div class="panel">
+      <h3>TXT generados</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Fecha</th><th>Usuario</th><th>Rango</th><th>Cantidad</th><th>Archivo</th></tr></thead>
+        <tbody>${txts.length? txts.map(t=>`<tr><td>${new Date(t.fecha).toLocaleString('es-PE')}</td><td>${escapeHtml(t.usuario)}</td><td>${escapeHtml(t.rango)}</td><td>${t.cantidad}</td><td>${escapeHtml(t.archivo)}</td></tr>`).join('') : `<tr><td colspan="5" class="empty">Sin registros.</td></tr>`}</tbody>
+      </table></div>
+    </div>
+    <div style="text-align:center; padding:18px 0 6px; color:var(--muted); font-size:11.5px;">
+      Control de Tareo · Desarrollado por Victor Montiel · 2026
+    </div>
+  `;
+}
+
+/* ==========================================================
+   COPIA DE SEGURIDAD (exportar / restaurar toda la base local)
+   ========================================================== */
+function descargarBackup(){
+  const payload = {
+    _tipo: 'control_tareo_backup',
+    _version: 1,
+    _fechaExportacion: todayIso(),
+    db: DB
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const nombre = `control_tareo_backup_${isoDate(new Date())}.json`;
+  a.href = url; a.download = nombre;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  DB.historial.cargas.push({tipo:'BACKUP', fecha: todayIso(), usuario:SESSION.user, detalle:`Copia de seguridad descargada (${nombre})`});
+  saveDB();
+}
+function handleRestoreFile(input){
+  const file = input.files[0];
+  if(!file) return;
+  const msgEl = document.getElementById('backup-msg');
+  const reader = new FileReader();
+  reader.onload = function(e){
+    let payload;
+    try{ payload = JSON.parse(e.target.result); }
+    catch(err){ msgEl.innerHTML = `<div class="msg-box err">El archivo no es una copia de seguridad válida (no se pudo leer como JSON).</div>`; return; }
+    const nuevaDB = payload && payload._tipo==='control_tareo_backup' ? payload.db : payload;
+    if(!nuevaDB || typeof nuevaDB!=='object' || !('trabajadores' in nuevaDB)){
+      msgEl.innerHTML = `<div class="msg-box err">El archivo no tiene el formato esperado de una copia de seguridad de Control de Tareo.</div>`;
+      return;
+    }
+    const confirmar = window.confirm('Esto reemplazará TODA la información actual del sistema (padrón, talana, francoplan, observaciones, historial) por la del archivo de respaldo. Esta acción no se puede deshacer. ¿Deseas continuar?');
+    if(!confirmar){ input.value=''; return; }
+    DB = nuevaDB;
+    if(!DB.usuarios) DB.usuarios = {};
+    if(!DB.alertasMarcacion) DB.alertasMarcacion = {};
+    if(!DB.historial) DB.historial = {cargas:[], procesos:[], txts:[]};
+    saveDB();
+    msgEl.innerHTML = `<div class="msg-box ok">Copia de seguridad restaurada correctamente${payload._fechaExportacion ? ' (generada el '+toDisplayDate(payload._fechaExportacion.split('T')[0])+')' : ''}.</div>`;
+    input.value='';
+    renderHistorial();
+  };
+  reader.readAsText(file);
+}
+
+
+</script>
+</body>
+</html>
