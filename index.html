@@ -215,7 +215,7 @@
         <div style="margin-top:12px">
           <div class="field"><label>Client ID (Entra ID)</label><input id="cfg-client-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" readonly></div>
           <div class="field"><label>Tenant ID</label><input id="cfg-tenant-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx o organizations" readonly></div>
-          <div class="field"><label>URL del sitio SharePoint</label><input id="cfg-site-url" placeholder="https://consorciorovellainmac.sharepoint.com/sites/CONSORCIOROVELLA-INMAC"></div>
+          <div class="field"><label>URL del sitio SharePoint</label><input id="cfg-site-url" placeholder="https://empresa.sharepoint.com/sites/ControlTareo"></div>
           <div style="font-size:11.5px;color:var(--muted);margin:6px 0 10px">El lunes, con el consentimiento de administrador, esta URL permitirá sincronizar Tareo, Observaciones y Alertas con SharePoint.</div>
           <button class="btn secondary" onclick="guardarConfigM365()">Guardar configuración</button>
           <div id="cfg-msg" style="margin-top:8px"></div>
@@ -251,21 +251,6 @@
     <div class="actions">
       <button class="btn secondary" onclick="closeModalReg()">Cancelar</button>
       <button class="btn" onclick="confirmRegularizacion()">Confirmar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: set pin first time -->
-<div class="modal-bg" id="modal-setpin">
-  <div class="modal">
-    <h3>Configurar PIN — <span id="setpin-user"></span></h3>
-    <p style="font-size:12.5px;color:var(--muted)">Primera vez que este usuario ingresa. Define un PIN de 4 dígitos.</p>
-    <div class="field"><label>Nuevo PIN</label><input id="setpin-a" type="password" maxlength="4" inputmode="numeric"></div>
-    <div class="field"><label>Confirmar PIN</label><input id="setpin-b" type="password" maxlength="4" inputmode="numeric"></div>
-    <div class="login-msg" id="setpin-msg"></div>
-    <div class="actions">
-      <button class="btn secondary" onclick="closeSetPin()">Cancelar</button>
-      <button class="btn" onclick="confirmSetPin()">Guardar PIN</button>
     </div>
   </div>
 </div>
@@ -482,7 +467,6 @@ function usarBackendSharePoint(){ return SHAREPOINT_CONFIG.enabled === true; }
 const DB_KEY = 'controlTareoDB_v1';
 let DB = null;
 let SESSION = null; // {user, rol}
-let pendingSetPin = null;
 
 /* ---------- utilidades ---------- */
 function todayIso(){ return new Date().toISOString(); }
@@ -496,11 +480,6 @@ function dniKey(v){
   // si es numerico, quitar ceros a la izquierda para normalizar la clave de cruce
   if(/^\d+$/.test(s)){ s = s.replace(/^0+(?=\d)/,''); }
   return s.toUpperCase();
-}
-async function sha256(text){
-  const enc = new TextEncoder().encode(text);
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 function parseExcelDateCell(v){
   // devuelve iso YYYY-MM-DD o null
@@ -555,7 +534,6 @@ function escapeHtml(s){ return (s===undefined||s===null)?'':String(s).replace(/[
 /* ---------- estado inicial ---------- */
 function freshDB(){
   return {
-    usuarios: {},
     trabajadores: {},   // dniKey -> {dniOriginal, nombre, correo, vinculos:[...]}
     talana: {},         // "dniKey|fecha" -> {entrada, salida, dniOriginal, fecha, nombre}
     francoplan: {},      // "AAAA-MM" -> {versions:[{rev,filename,fechaCarga,mesLabel,data:{dniKey:{fecha:code}}}]}
@@ -574,7 +552,6 @@ function loadDB(){
   } else {
     DB = freshDB();
   }
-  if(!DB.usuarios) DB.usuarios = {};
   if(!DB.alertasMarcacion) DB.alertasMarcacion = {};
 }
 function saveDB(){
@@ -583,70 +560,11 @@ function saveDB(){
 
 /* ---------- LOGIN ---------- */
 loadDB();
-document.getElementById('login-user').addEventListener('change', updateLoginHint);
-updateLoginHint();
 
-function updateLoginHint(){
-  const u = document.getElementById('login-user').value;
-  const hint = document.getElementById('login-hint');
-  if(!DB.usuarios[u]){
-    hint.textContent = 'Primera vez que ingresa este usuario: se le pedirá crear un PIN.';
-  } else {
-    hint.textContent = '';
-  }
-}
-
-async function handleLogin(){
-  const user = document.getElementById('login-user').value;
-  const pin = document.getElementById('login-pin').value.trim();
-  const msg = document.getElementById('login-msg');
-  msg.textContent='';
-  if(!/^\d{4}$/.test(pin)){ msg.textContent='El PIN debe tener 4 dígitos.'; return; }
-  if(!DB.usuarios[user]){
-    pendingSetPin = {user, pinTyped:pin};
-    document.getElementById('setpin-user').textContent = user;
-    document.getElementById('setpin-a').value = pin;
-    document.getElementById('setpin-b').value = '';
-    document.getElementById('setpin-msg').textContent = '';
-    document.getElementById('modal-setpin').style.display='flex';
-    return;
-  }
-  const hash = await sha256(user+':'+pin);
-  if(hash !== DB.usuarios[user].pinHash){
-    msg.textContent = 'PIN incorrecto.';
-    return;
-  }
-  startSession(user);
-}
-function closeSetPin(){ document.getElementById('modal-setpin').style.display='none'; pendingSetPin=null; }
-async function confirmSetPin(){
-  const a = document.getElementById('setpin-a').value.trim();
-  const b = document.getElementById('setpin-b').value.trim();
-  const msgEl = document.getElementById('setpin-msg');
-  if(!/^\d{4}$/.test(a)){ msgEl.textContent='PIN inválido.'; return; }
-  if(a!==b){ msgEl.textContent='Los PIN no coinciden.'; return; }
-  const user = pendingSetPin.user;
-  const rol = user==='RRHH' ? 'RRHH' : 'ADMINISTRACION';
-  const hash = await sha256(user+':'+a);
-  DB.usuarios[user] = {pinHash:hash, rol};
-  saveDB();
-  document.getElementById('modal-setpin').style.display='none';
-  startSession(user);
-}
-function startSession(user){
-  SESSION = {user, rol: DB.usuarios[user].rol};
-  document.getElementById('login-screen').style.display='none';
-  document.getElementById('app').style.display='grid';
-  document.getElementById('who-user').textContent = user;
-  document.getElementById('who-rol').textContent = SESSION.rol;
-  buildNav();
-  goTab(SESSION.rol==='RRHH' ? 'observaciones' : 'dashboard');
-}
 function logout(){
   SESSION = null;
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
-  document.getElementById('login-pin').value='';
 }
 
 /* ---------- NAV ---------- */
@@ -1967,7 +1885,6 @@ function handleRestoreFile(input){
     const confirmar = window.confirm('Esto reemplazará TODA la información actual del sistema (padrón, talana, francoplan, observaciones, historial) por la del archivo de respaldo. Esta acción no se puede deshacer. ¿Deseas continuar?');
     if(!confirmar){ input.value=''; return; }
     DB = nuevaDB;
-    if(!DB.usuarios) DB.usuarios = {};
     if(!DB.alertasMarcacion) DB.alertasMarcacion = {};
     if(!DB.historial) DB.historial = {cargas:[], procesos:[], txts:[]};
     saveDB();
