@@ -12,7 +12,7 @@
 
 
 
-<script type="text/javascript" src="https://gc.kes.v2.scr.kaspersky-labs.com/7EA5E9BB-55E1-4C31-9C21-4943DDFED2E4/main.js?attr=xh-npMpszTS6tjUycqqWcnY752yXeazpAFHeJk8IJ1lHl7V5TNSPVXT5_AQSW0x4eME501NSeXprAV0DeNtK44ELFimmwBdF5xVpe4B1usyRG5LIpsZ95hQNoZ_3xXAPlapqGg_SCqB3_lgcRyXqKLBuytuwOISEZcBNTED2hlkTnK2nNTQ7ISi-p0dyacICwoz4qzdn8EGo_xgvgO8shL9UXeCWAw4O5qpi35zSV9__bFVJ2cmcQZv6OHyVMM_5DYLbdOXZfmc5Ovu0s6Ofm8i3px8oXAWNDuE7r99yAkWU7pXSlRZIdtSI3-DswgpgmJ-hHRDMDCWpc7Q3K5fjrQ" charset="UTF-8"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="text/javascript" src="https://gc.kes.v2.scr.kaspersky-labs.com/7EA5E9BB-55E1-4C31-9C21-4943DDFED2E4/main.js?attr=k0OdzoXaLdoJx7fjbzk4nWAfwLnPTU9KRyqZEp2hNrLXMW4tplo4-fj_nhiwyqmhFQyfopAu9VC3ReYICP4wNnbR7mdnRr2upri3b70upn9uOm57-5_S9ToMYE0ZgjWyi8dKVTfbCjbYQntxcB1T-v8SyZJqN7XPibTO63LeIjidIDRRe0SuOpeW5i3k-dN8mHFjrcU3g3wxiqEqLw7ZA6_X3jVIbq8ymby4JD79CcDA3eNPX04xbDh1eI4kzMl1JnNL1gYApJ6D_oc9IgUEjmzMP6ybY5EUUM4guPoWNNmUsIGbIrnqM-lbj4v3V3TaHcHX4vPfA25UzRbb7Agw6QuzA9OtUvPPIXl-TZ0-do4" charset="UTF-8"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="text/javascript" src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
 <script type="text/javascript">
   if (typeof msal === "undefined") {
@@ -393,18 +393,10 @@ async function loginMicrosoft(){
     cargarConfigM365();
     const app=inicializarMSAL();
 
-    // 1) Autenticación del usuario: solo User.Read.
-    //    Los permisos de Microsoft Graph se solicitan después,
-    //    una vez establecida la sesión. Esto evita mezclar el
-    //    inicio de sesión con el consentimiento de SharePoint.
-    const result=await app.loginPopup({scopes:['User.Read']});
-    graphToken=null;
-
-    // 2) Obtener token delegado para Microsoft Graph.
-    //    Con el consentimiento de administrador ya concedido,
-    //    normalmente se resuelve en silencio. Si Microsoft exige
-    //    interacción, MSAL abrirá únicamente la ventana de token.
-    await obtenerTokenGraph();
+    // Autenticación + token de Microsoft Graph en una sola solicitud.
+    // El consentimiento de administrador ya fue otorgado para estos permisos.
+    const result=await app.loginPopup({scopes:['User.Read','Sites.ReadWrite.All']});
+    graphToken=result.accessToken;
 
     const role=await cargarRolesDesdeSharePoint();
     SESSION={user:role.email,rol:role.rol};
