@@ -9,70 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Control de Tareo</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%93%EF%B8%8F%3C/text%3E%3C/svg%3E">
-
-<script type="text/javascript" src="https://gc.kes.v2.scr.kaspersky-labs.com/7EA5E9BB-55E1-4C31-9C21-4943DDFED2E4/main.js?attr=aTAcuFzuhP9LKWJIFLAKn77TY6lVJby1SeNseB2Ua3p0aKLYQAnMugpbm4rNdWhQQqpxsoJmMqjaRwepZUfQeQST9OH43sB8rZbb9nD6kEBFTMbWiFBm9e61lnvkEP8esmy6u1iAnvzAK9hTa0cYlrR9ApxybHPwTcGnRUtoPRhQX9-anu-kxuKcXKQKGy9wFOTluHfbGsdB6NZA5_bZujQwVYYVMgo6v5l_3bsSuqepyF3XbdfMvZkwwH7szfLTLOpL24uge_LiUa3wIh7k3DlJKFqTv0aV_OPxzkb8V1J36Q1hSGZmW1Vj_jnQ2ixKa1drnaUxwzXwkLHUk-WrHToAulyR0OoWXY8ylbmN6gc" charset="UTF-8"></script><section id="tab-exportaciones" class="tab-content" style="display:none;">
-  <div class="card">
-    <div class="card-header">
-      <div>
-        <h2>📤 Exportaciones</h2>
-        <p class="muted">Genera archivos Excel a partir del tareo procesado.</p>
-      </div>
-    </div>
-
-    <div class="grid-form">
-      <div class="form-group">
-        <label for="expFechaInicio">Desde</label>
-        <input type="date" id="expFechaInicio">
-      </div>
-      <div class="form-group">
-        <label for="expFechaFin">Hasta</label>
-        <input type="date" id="expFechaFin">
-      </div>
-      <div class="form-group">
-        <label for="expTipo">Tipo de exportación</label>
-        <select id="expTipo">
-          <option value="tareo">Excel – Tareo mensual</option>
-          <option value="observaciones">Excel – Observaciones</option>
-          <option value="talana">Excel – Marcaciones Talana</option>
-          <option value="alertas">Excel – Alertas de marcación</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="grid-form" style="margin-top:12px;">
-      <div class="form-group">
-        <label for="expProyecto">Proyecto (opcional)</label>
-        <input type="text" id="expProyecto" placeholder="Todos">
-      </div>
-      <div class="form-group">
-        <label for="expItem">Item (opcional)</label>
-        <input type="text" id="expItem" placeholder="Todos">
-      </div>
-      <div class="form-group">
-        <label for="expDni">Trabajador / DNI (opcional)</label>
-        <input type="text" id="expDni" placeholder="Todos">
-      </div>
-    </div>
-
-    <div style="margin-top:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-      <button class="btn btn-primary" type="button" onclick="generarExportacionExcel()">⬇️ Generar Excel</button>
-      <span id="expEstado" class="muted">Selecciona el periodo y genera el archivo.</span>
-    </div>
-  </div>
-
-  <div class="card" style="margin-top:16px;">
-    <h3>Formato del Excel de Tareo</h3>
-    <p class="muted">
-      La exportación de Tareo usa una fila por trabajador y una columna por cada fecha del periodo,
-      conservando los datos del trabajador y las marcas procesadas por el motor.
-    </p>
-    <div class="muted" style="font-size:13px;">
-      Marcas contempladas: 10, 12, DL, VA, FE, P1, DM y TL.
-    </div>
-  </div>
-</section>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="text/javascript" src="https://gc.kes.v2.scr.kaspersky-labs.com/7EA5E9BB-55E1-4C31-9C21-4943DDFED2E4/main.js?attr=PZbxF9hCLP2_pFh6DZnW-JRUTjUNOGoJ7j4Ul09Qm_eIuJnOTN4-IXEC2vDDhgY1eAFf39nXFkDNM-Zx7nH-LvFCBHYdc4saheOLzRiuenSVWqcGhKMEHDfw3vH87mH7UuSBBFvbB2OiYeEzZHL-1a7FPLYXwhsDAp4SSZrKoQ6ce3V32FLJTBNg-pPfygnrvpNC-7FCum2UDsYflRQEi0i7efRnJiOTtBgHtQe1MtupHCWec24Ugyh271_SU0zqRzesBYd1VL5IaEWq534Lk_E9ScPFm7TuYA0yRQadlicvxXUHPMixHaN811aH8np6ws0KAXinDqC0OPQ4Fc9lyQ" charset="UTF-8"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="text/javascript" src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
 <script type="text/javascript">
   if (typeof msal === "undefined") {
@@ -276,7 +213,6 @@
           <div class="field"><label>Client ID (Entra ID)</label><input id="cfg-client-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" readonly></div>
           <div class="field"><label>Tenant ID</label><input id="cfg-tenant-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx o organizations" readonly></div>
           <div class="field"><label>URL del sitio SharePoint</label><input id="cfg-site-url" placeholder="https://empresa.sharepoint.com/sites/ControlTareo"></div>
-          <div style="font-size:11.5px;color:var(--muted);margin:6px 0 10px">El lunes, con el consentimiento de administrador, esta URL permitirá sincronizar Tareo, Observaciones y Alertas con SharePoint.</div>
           <button class="btn secondary" onclick="guardarConfigM365()">Guardar configuración</button>
           <div id="cfg-msg" style="margin-top:8px"></div>
         </div>
@@ -396,49 +332,6 @@ async function graphListItems(listTitle, select='*'){
   let data=await graph(url); let all=data.value||[];
   while(data['@odata.nextLink']){ const r=await fetch(data['@odata.nextLink'],{headers:{Authorization:'Bearer '+graphToken}}); if(!r.ok) throw new Error('Error paginando SharePoint'); data=await r.json(); all=all.concat(data.value||[]); }
   return all;
-}
-
-async function graphCreateListItem(listTitle, fields){
-  if(!graphSiteId) await resolverSite();
-  return graph(`/sites/${graphSiteId}/lists/${encodeURIComponent(listTitle)}/items`,{
-    method:'POST', body:JSON.stringify({fields})
-  });
-}
-async function graphUpdateListItem(listTitle, itemId, fields){
-  if(!graphSiteId) await resolverSite();
-  return graph(`/sites/${graphSiteId}/lists/${encodeURIComponent(listTitle)}/items/${encodeURIComponent(itemId)}/fields`,{
-    method:'PATCH', body:JSON.stringify(fields)
-  });
-}
-async function graphFindListItem(listTitle, filterFields){
-  const items=await graphListItems(listTitle,'*');
-  return items.find(x=>Object.entries(filterFields).every(([k,v])=>String((x.fields||{})[k]??'')===String(v??'')))||null;
-}
-async function sincronizarAlertasSharePoint(){
-  if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0};
-  let creadas=0, actualizadas=0;
-  for(const a of Object.values(DB.alertasMarcacion||{})){
-    try{
-      const existing=await graphFindListItem('AlertasMarcacion',{Title:a.dni,Fecha:a.fecha});
-      const fields={Title:a.dni,Fecha:a.fecha,Estado:a.estado==='RESUELTA'?'Resuelta':a.estado==='ESCALADA'?'Escalada':'Pendiente',Canal:'Correo',FechaHoraNotificacion:a.fechaHoraNotificacion||null,FechaHoraResolucion:a.fechaHoraResolucion||null,ObservacionVinculada:!!a.observacionVinculada};
-      if(existing){ await graphUpdateListItem('AlertasMarcacion',existing.id,fields); actualizadas++; }
-      else { await graphCreateListItem('AlertasMarcacion',fields); creadas++; }
-    }catch(e){ console.warn('No se pudo sincronizar alerta con SharePoint:',a,e); }
-  }
-  return {creadas,actualizadas};
-}
-async function sincronizarObservacionesSharePoint(){
-  if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0};
-  let creadas=0, actualizadas=0;
-  for(const o of DB.observaciones||[]){
-    try{
-      const existing=await graphFindListItem('Observaciones',{Title:o.dni,Fecha:o.fecha,Tipo:o.tipo});
-      const fields={Title:o.dni,Fecha:o.fecha,Tipo:o.tipo,Motivo:o.motivo,Estado:o.estado==='REGULARIZADA'?'Regularizada':o.estado==='INFORMATIVA'?'Informativa':'Pendiente'};
-      if(existing){ await graphUpdateListItem('Observaciones',existing.id,fields); actualizadas++; }
-      else { await graphCreateListItem('Observaciones',fields); creadas++; }
-    }catch(e){ console.warn('No se pudo sincronizar observación con SharePoint:',o,e); }
-  }
-  return {creadas,actualizadas};
 }
 async function cargarRolesDesdeSharePoint(){
   const email=(await graph('/me')).mail || (await graph('/me')).userPrincipalName;
@@ -603,8 +496,6 @@ function freshDB(){
     tareo: {},           // "dniKey|fecha" -> registro procesado
     observaciones: [],   // lista {id,dniKey,dni,nombre,fecha,tipo,motivo,estado,codigoReg,usuarioReg,fechaHoraReg}
     alertasMarcacion: {}, // "dniKey|fecha" -> {dni,nombre,fecha,estado:PENDIENTE|RESUELTA|ESCALADA,canal,notificado,fechaHoraNotificacion,fechaHoraResolucion,observacionVinculada}
-
-<button class="nav-tab" data-tab="exportaciones" onclick="showTab('exportaciones')">📤 Exportaciones</button>
     historial: { cargas:[], procesos:[], txts:[] },
     lastTxt: null
   };
@@ -1551,18 +1442,13 @@ function renderTablaAlertas(){
     </table></div>
   `;
 }
-async function handleProcesarAlertas(){
+function handleProcesarAlertas(){
   const fecha = document.getElementById('am-fecha').value;
   const msgEl = document.getElementById('am-msg');
   if(!fecha){ msgEl.innerHTML = `<div class="msg-box err">Selecciona una fecha.</div>`; return; }
   if(Object.keys(DB.trabajadores).length===0){ msgEl.innerHTML = `<div class="msg-box err">Debe cargar el padrón antes de detectar alertas.</div>`; return; }
   const res = procesarAlertasMarcacion(fecha);
-  let syncMsg='';
-  if(M365.siteUrl && graphToken){
-    const sp=await sincronizarAlertasSharePoint();
-    syncMsg=` Se sincronizaron ${sp.creadas} nueva(s) y ${sp.actualizadas} existente(s) con SharePoint; Power Automate realizará el envío del correo.`;
-  }
-  msgEl.innerHTML = `<div class="msg-box ok">${res.generadas} alerta(s) nueva(s) generada(s), ${res.resueltas} resuelta(s) por nueva marcación, ${res.sinCambio} ya estaban notificadas (no se reenviaron).${syncMsg}</div>`;
+  msgEl.innerHTML = `<div class="msg-box ok">${res.generadas} alerta(s) nueva(s) generada(s), ${res.resueltas} resuelta(s) por nueva marcación, ${res.sinCambio} ya estaban notificadas (no se reenviaron).</div>`;
   document.getElementById('am-tabla-panel').innerHTML = renderTablaAlertas();
 }
 
@@ -1640,7 +1526,7 @@ function applyTareoFilter(){
   if(estado) registros = registros.filter(r=>r.estado===estado);
   document.querySelector('#tareo-table tbody').innerHTML = renderTareoRows(registros);
 }
-async function handleProcesar(){
+function handleProcesar(){
   const ini = document.getElementById('proc-ini').value;
   const fin = document.getElementById('proc-fin').value;
   const msgEl = document.getElementById('proc-msg');
@@ -1648,12 +1534,7 @@ async function handleProcesar(){
   if(Object.keys(DB.trabajadores).length===0){ msgEl.innerHTML = `<div class="msg-box err">Debe cargar el padrón antes de procesar.</div>`; return; }
   const res = procesarRango(ini, fin);
   if(res.error){ msgEl.innerHTML = `<div class="msg-box err">${res.error}</div>`; return; }
-  let syncMsg='';
-  if(M365.siteUrl && graphToken){
-    const spObs=await sincronizarObservacionesSharePoint();
-    syncMsg=` Se sincronizaron ${spObs.creadas} nueva(s) y ${spObs.actualizadas} existente(s) con SharePoint; el flujo de RRHH enviará la notificación automáticamente.`;
-  }
-  msgEl.innerHTML = `<div class="msg-box ok">Procesado ${res.dias} día(s): ${res.correctos} correctos, ${res.obsRRHH} observaciones para RR.HH., ${res.alertasAdmin} alertas para Administración, ${res.ignorados} registros ignorados por vigencia.${syncMsg}</div>`;
+  msgEl.innerHTML = `<div class="msg-box ok">Procesado ${res.dias} día(s): ${res.correctos} correctos, ${res.obsRRHH} observaciones para RR.HH., ${res.alertasAdmin} alertas para Administración, ${res.ignorados} registros ignorados por vigencia.</div>`;
   renderTareo();
 }
 
@@ -1955,219 +1836,5 @@ function handleRestoreFile(input){
 
 
 </script>
-
-<script>
-/* ===== Exportaciones Excel ===== */
-(function(){
-  function pad2(n){ return String(n).padStart(2,'0'); }
-  function isoDate(d){
-    return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
-  }
-  function parseAnyDate(v){
-    if(v instanceof Date && !isNaN(v)) return new Date(v.getFullYear(),v.getMonth(),v.getDate());
-    if(typeof v === 'number'){
-      // Excel serial date
-      const base = new Date(1899,11,30);
-      const d = new Date(base.getTime() + v*86400000);
-      return new Date(d.getFullYear(),d.getMonth(),d.getDate());
-    }
-    if(typeof v === 'string'){
-      let s=v.trim();
-      if(!s) return null;
-      let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-      if(m) return new Date(+m[1],+m[2]-1,+m[3]);
-      m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-      if(m) return new Date(+m[3],+m[2]-1,+m[1]);
-    }
-    return null;
-  }
-  function fmtDMY(d){ return pad2(d.getDate())+'/'+pad2(d.getMonth()+1)+'/'+d.getFullYear(); }
-  function dateList(ini,fin){
-    const out=[]; const d=new Date(ini.getTime());
-    while(d<=fin){ out.push(new Date(d.getTime())); d.setDate(d.getDate()+1); }
-    return out;
-  }
-  function dbArray(name){
-    try{
-      if(window.DB && Array.isArray(DB[name])) return DB[name];
-      if(window.DB && DB._sharepoint && Array.isArray(DB._sharepoint[name])) return DB._sharepoint[name];
-    }catch(e){}
-    return [];
-  }
-  function firstVal(obj, keys){
-    for(const k of keys){
-      if(obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
-    }
-    return '';
-  }
-  function getWorker(dni){
-    return dbArray('trabajadores').find(x => String(firstVal(x,['DNI','Title','dni'])).trim()===String(dni).trim()) || {};
-  }
-  function getVinculo(dni, fecha){
-    const f=fecha.getTime();
-    const vs=dbArray('vinculos').filter(v=>{
-      const vd=String(firstVal(v,['DNI','Title','dni'])).trim();
-      if(vd!==String(dni).trim()) return false;
-      const ini=parseAnyDate(firstVal(v,['FechaIngreso','fechaIngreso']));
-      const fin=parseAnyDate(firstVal(v,['FechaCese','fechaCese']));
-      if(ini && f<ini.getTime()) return false;
-      if(fin && f>fin.getTime()) return false;
-      return true;
-    });
-    vs.sort((a,b)=>{
-      const da=parseAnyDate(firstVal(a,['FechaIngreso','fechaIngreso']));
-      const dbb=parseAnyDate(firstVal(b,['FechaIngreso','fechaIngreso']));
-      return (dbb?dbb.getTime():0)-(da?da.getTime():0);
-    });
-    return vs[0]||{};
-  }
-  function getTareo(dni, fecha){
-    const target=isoDate(fecha);
-    return dbArray('tareo').find(t=>{
-      const td=String(firstVal(t,['DNI','Title','dni'])).trim();
-      const tf=parseAnyDate(firstVal(t,['Fecha','fecha']));
-      return td===String(dni).trim() && tf && isoDate(tf)===target;
-    }) || null;
-  }
-
-  window.generarExportacionExcel = function(){
-    const estado=document.getElementById('expEstado');
-    try{
-      if(typeof XLSX==='undefined') throw new Error('La librería Excel (XLSX) no está disponible.');
-      const ini=parseAnyDate(document.getElementById('expFechaInicio').value);
-      const fin=parseAnyDate(document.getElementById('expFechaFin').value);
-      if(!ini || !fin || ini>fin){ estado.textContent='⚠️ Selecciona un periodo válido.'; return; }
-
-      const tipo=document.getElementById('expTipo').value;
-      const proyecto=(document.getElementById('expProyecto').value||'').trim().toUpperCase();
-      const item=(document.getElementById('expItem').value||'').trim().toUpperCase();
-      const dniFiltro=(document.getElementById('expDni').value||'').trim();
-
-      let data=[], filename='';
-      if(tipo==='tareo'){
-        const fechas=dateList(ini,fin);
-        const tRows=dbArray('tareo');
-        const dnis=[...new Set(tRows.map(t=>String(firstVal(t,['DNI','Title','dni'])).trim()).filter(Boolean))];
-
-        const trabajadores=dnis.map(dni=>{
-          const w=getWorker(dni);
-          const v=getVinculo(dni,ini) || {};
-          return {dni,w,v};
-        }).filter(r=>{
-          const p=String(firstVal(r.v,['Proyecto','proyecto'])).toUpperCase();
-          const it=String(firstVal(r.v,['Item','item'])).toUpperCase();
-          return (!dniFiltro || r.dni===dniFiltro) &&
-                 (!proyecto || p===proyecto) &&
-                 (!item || it===item);
-        });
-
-        const head=[
-          'Itm','Código','Documento','Nombre del Trabajador','Fec.Ing.','Fec.Ces.',
-          'Marcas','Centro de Costo Actual','Centro de Costo Tareo',
-          ...fechas.map(fmtDMY)
-        ];
-        data.push(head);
-
-        trabajadores.forEach((r,idx)=>{
-          const v=r.v, w=r.w;
-          const marks=fechas.map(d=>{
-            const t=getTareo(r.dni,d);
-            return t ? firstVal(t,['Marca','marca']) : '';
-          });
-          const count=marks.filter(Boolean).length;
-          const ingreso=parseAnyDate(firstVal(v,['FechaIngreso','fechaIngreso']));
-          const cese=parseAnyDate(firstVal(v,['FechaCese','fechaCese']));
-          const proyectoV=firstVal(v,['Proyecto','proyecto']);
-          const itemV=firstVal(v,['Item','item']);
-          data.push([
-            idx+1,
-            firstVal(w,['CodigoHapiqa','Codigo','codigo']),
-            r.dni,
-            firstVal(w,['Nombre','nombre']),
-            ingreso?fmtDMY(ingreso):'',
-            cese?fmtDMY(cese):'',
-            count,
-            proyectoV,
-            proyectoV,
-            ...marks
-          ]);
-        });
-        filename='TAREO_'+isoDate(ini)+'_'+isoDate(fin)+'.xlsx';
-
-      } else if(tipo==='observaciones'){
-        const arr=dbArray('observaciones').filter(o=>{
-          const d=parseAnyDate(firstVal(o,['Fecha','fecha']));
-          return d && d>=ini && d<=fin &&
-            (!dniFiltro || String(firstVal(o,['DNI','Title','dni']))===dniFiltro);
-        });
-        data=[['DNI','Fecha','Tipo','Motivo','Estado','ObservacionVinculada']];
-        arr.forEach(o=>data.push([
-          firstVal(o,['DNI','Title','dni']),
-          (()=>{const d=parseAnyDate(firstVal(o,['Fecha','fecha']));return d?fmtDMY(d):''})(),
-          firstVal(o,['Tipo','tipo']),
-          firstVal(o,['Motivo','motivo']),
-          firstVal(o,['Estado','estado']),
-          firstVal(o,['ObservacionVinculada','observacionVinculada'])
-        ]));
-        filename='OBSERVACIONES_'+isoDate(ini)+'_'+isoDate(fin)+'.xlsx';
-
-      } else if(tipo==='talana'){
-        const arr=dbArray('talana').filter(o=>{
-          const d=parseAnyDate(firstVal(o,['Fecha','fecha']));
-          return d && d>=ini && d<=fin &&
-            (!dniFiltro || String(firstVal(o,['DNI','Title','dni']))===dniFiltro);
-        });
-        data=[['DNI','Fecha','Entrada','Salida','Origen']];
-        arr.forEach(o=>{
-          const d=parseAnyDate(firstVal(o,['Fecha','fecha']));
-          data.push([firstVal(o,['DNI','Title','dni']),d?fmtDMY(d):'',firstVal(o,['Entrada','entrada']),firstVal(o,['Salida','salida']),firstVal(o,['Origen','origen'])]);
-        });
-        filename='TALANA_'+isoDate(ini)+'_'+isoDate(fin)+'.xlsx';
-
-      } else if(tipo==='alertas'){
-        const arr=dbArray('alertasMarcacion').filter(o=>{
-          const d=parseAnyDate(firstVal(o,['Fecha','fecha']));
-          return d && d>=ini && d<=fin &&
-            (!dniFiltro || String(firstVal(o,['DNI','Title','dni']))===dniFiltro);
-        });
-        data=[['DNI','Fecha','Estado','Canal','FechaHoraNotificacion','FechaHoraResolucion','ObservacionVinculada']];
-        arr.forEach(o=>{
-          const d=parseAnyDate(firstVal(o,['Fecha','fecha']));
-          data.push([
-            firstVal(o,['DNI','Title','dni']),d?fmtDMY(d):'',
-            firstVal(o,['Estado','estado']),firstVal(o,['Canal','canal']),
-            firstVal(o,['FechaHoraNotificacion','fechaHoraNotificacion']),
-            firstVal(o,['FechaHoraResolucion','fechaHoraResolucion']),
-            firstVal(o,['ObservacionVinculada','observacionVinculada'])
-          ]);
-        });
-        filename='ALERTAS_MARCACION_'+isoDate(ini)+'_'+isoDate(fin)+'.xlsx';
-      }
-
-      const wb=XLSX.utils.book_new();
-      const ws=XLSX.utils.aoa_to_sheet(data);
-      ws['!cols']=Array.from({length:Math.max(1,data[0]?.length||1)},()=>({wch:16}));
-      XLSX.utils.book_append_sheet(wb,ws,'Exportación');
-      XLSX.writeFile(wb,filename);
-      estado.textContent='✅ Archivo generado: '+filename;
-    }catch(e){
-      console.error(e);
-      estado.textContent='❌ '+(e.message||'No se pudo generar el Excel.');
-    }
-  };
-
-  // Set sensible defaults when the export tab is opened.
-  document.addEventListener('DOMContentLoaded',function(){
-    const a=document.getElementById('expFechaInicio'), b=document.getElementById('expFechaFin');
-    if(a && b){
-      const now=new Date();
-      const first=new Date(now.getFullYear(),now.getMonth(),1);
-      const last=new Date(now.getFullYear(),now.getMonth()+1,0);
-      a.value=isoDate(first); b.value=isoDate(last);
-    }
-  });
-})();
-</script>
-
 </body>
 </html>
