@@ -409,6 +409,31 @@ async function loginMicrosoft(){
     msg.innerHTML='<div class="msg-box err">'+escapeHtml(e.message||String(e))+'</div>';
   }
 }
+async function restaurarSesionM365(){
+  // Al recargar la página (F5), Microsoft ya guardó la sesión en el navegador.
+  // Aquí la recuperamos sin mostrar ninguna ventana emergente ni pedir clic.
+  try{
+    cargarConfigM365();
+    if(!M365.clientId || !window.msal) return; // MSAL aún no cargó o no hay configuración
+    const app=inicializarMSAL();
+    const accounts=app.getAllAccounts();
+    if(!accounts.length) return; // nunca inició sesión en este navegador, o ya la cerró
+
+    const result=await app.acquireTokenSilent({scopes:['User.Read','Sites.ReadWrite.All'],account:accounts[0]});
+    graphToken=result.accessToken;
+
+    const role=await cargarRolesDesdeSharePoint();
+    SESSION={user:role.email,rol:role.rol};
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').style.display='grid';
+    document.getElementById('who-user').textContent=role.email;
+    document.getElementById('who-rol').textContent=role.rol;
+    buildNav(); goTab(role.rol==='RRHH'?'observaciones':'dashboard');
+  }catch(e){
+    // La sesión expiró o no se pudo renovar en silencio: se deja la pantalla de login normal.
+    console.warn('No se pudo restaurar la sesión Microsoft 365 automáticamente:',e);
+  }
+}
 async function cargarDatosSharePoint(){
   if(!M365.clientId || !M365.siteUrl) return false;
   try{
@@ -427,7 +452,7 @@ async function cargarDatosSharePoint(){
     return true;
   }catch(e){ console.warn('SharePoint no disponible:',e); return false; }
 }
-window.addEventListener('load',()=>{ setTimeout(cargarConfigM365,50); });
+window.addEventListener('load',()=>{ setTimeout(restaurarSesionM365,50); });
 
 /* ==========================================================
    BACKEND SHAREPOINT / POWER AUTOMATE — CONFIGURACIÓN
