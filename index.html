@@ -12,7 +12,7 @@
 
 
 
-<script type="text/javascript" src="https://gc.kes.v2.scr.kaspersky-labs.com/7EA5E9BB-55E1-4C31-9C21-4943DDFED2E4/main.js?attr=yIPHzf0-E0_wBA3oD68gahYph9lJljM8z6ogaRuxLmY7j443I50QMO_lbHsDnmJ8QOqF9JdFxqcsca0VHmQX255AfDR5pfgvSZZKE1pKf4MOAakAvqI3drrkt2SlZKDreYc6EHMdJfB5nDdAsiAJ-AEF_rwCBMCgSt_Ps1zcykF5Mi3tAWu-F3k7XPVT7PwP1051K1IIJolHQcs5S2kxgk2ynrCQkEp-tVRV5Mlc_iIzzzL7NsqXuY5B7l2wumgWQllreGmfpQZ8WY0hG-gq7ruv1d-gIi7FL02zF2-CMEHYUV7i6wqw7P82FN2fAWK-MjmhRR7imoYdn3RZ8fW77a8oTayHaNb-UeEs_Bl20ao" charset="UTF-8"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="text/javascript" src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
 <script type="text/javascript">
   if (typeof msal === "undefined") {
@@ -275,9 +275,17 @@
    MICROSOFT 365 / ENTRA ID + MICROSOFT GRAPH
    ========================================================== */
 const M365_KEY = 'controlTareoM365Config_v1';
-let M365 = JSON.parse(localStorage.getItem(M365_KEY)||'null') || {
-  clientId:'ba57cf93-d81f-4287-bfea-4994bc53cdab', tenantId:'947d6fae-c37b-4141-a00d-1b5468320f44', siteUrl:''
+const M365_DEFAULTS = {
+  clientId:'ba57cf93-d81f-4287-bfea-4994bc53cdab',
+  tenantId:'947d6fae-c37b-4141-a00d-1b5468320f44',
+  siteUrl:'https://consorciorovellainmac.sharepoint.com/sites/CONSORCIOROVELLA-INMAC'
 };
+let M365 = {...M365_DEFAULTS, ...(JSON.parse(localStorage.getItem(M365_KEY)||'null') || {})};
+// Corrige automáticamente configuraciones antiguas guardadas con siteUrl vacío.
+if(!M365.siteUrl || !/^https:\/\//i.test(M365.siteUrl)){
+  M365.siteUrl=M365_DEFAULTS.siteUrl;
+  localStorage.setItem(M365_KEY,JSON.stringify(M365));
+}
 let msalApp = null;
 let graphToken = null;
 let graphSiteId = null;
@@ -295,7 +303,13 @@ function guardarConfigM365(){
 }
 function cargarConfigM365(){
   const a=document.getElementById('cfg-client-id'), b=document.getElementById('cfg-tenant-id'), c=document.getElementById('cfg-site-url');
-  if(a)a.value=M365.clientId||''; if(b)b.value=M365.tenantId||'organizations'; if(c)c.value=M365.siteUrl||'';
+  if(!M365.siteUrl || !/^https:\/\//i.test(M365.siteUrl)){
+    M365.siteUrl=M365_DEFAULTS.siteUrl;
+    localStorage.setItem(M365_KEY,JSON.stringify(M365));
+  }
+  if(a)a.value=M365.clientId||M365_DEFAULTS.clientId;
+  if(b)b.value=M365.tenantId||M365_DEFAULTS.tenantId;
+  if(c)c.value=M365.siteUrl;
 }
 function inicializarMSAL(){
   if(!window.msal) throw new Error('No se pudo cargar Microsoft MSAL Browser. Recarga la página e inténtalo nuevamente.');
