@@ -886,7 +886,7 @@ function renderPadron(){
     </div>` : ''}
     <div class="panel">
       <h3>Trabajadores registrados (${trabs.length})</h3>
-      <p style="font-size:12px;color:var(--muted)">El correo es necesario para las notificaciones del módulo "Alertas de marcación"; el padrón de Hapiqa no lo trae, así que se registra aquí manualmente.</p>
+      <p style="font-size:12px;color:var(--muted)">El correo es necesario para las notificaciones del módulo "Alertas de marcación". Si tu archivo del padrón trae una columna de correo, se carga automáticamente; si algún trabajador no lo trae, puedes escribirlo aquí manualmente.</p>
       ${trabs.length===0 ? '<div class="empty">Aún no se ha cargado ningún padrón.</div>' : `
       <div class="table-wrap"><table>
         <thead><tr><th>DNI</th><th>Nombre</th><th>Cargo</th><th>Régimen</th><th>Proyecto</th><th>Ítem</th><th>Ingreso</th><th>Cese</th><th>Estado</th><th>Vínculos</th><th>Correo</th></tr></thead>
@@ -947,6 +947,7 @@ function handlePadronFile(input){
       const colProyecto = findHeaderCol(headers, ['Proyecto']);
       const colItem = lastHeaderCol(headers, ['Item','Ítem']);
       const colCodigo = findHeaderCol(headers, ['Código','Codigo']);
+      const colCorreo = findHeaderCol(headers, ['Correo','Correo Electrónico','Correo Electronico','E-mail','Email']);
 
       if(colDni<0 || colIngreso<0){
         msgEl.innerHTML = `<div class="msg-box err">No se encontraron las columnas esperadas (Núm.Doc. / Fec.Ing.) en la primera hoja. Verifique la estructura del archivo del padrón.</div>`;
@@ -970,15 +971,17 @@ function handlePadronFile(input){
         const proyecto = colProyecto>=0 ? row[colProyecto] : null;
         const item = colItem>=0 ? row[colItem] : null;
         const codigo = colCodigo>=0 ? row[colCodigo] : null;
+        const correo = colCorreo>=0 ? String(row[colCorreo]||'').trim() : '';
 
         const nuevoVinculo = {ingreso, cese, cargo, regimen, estado, proyecto, item, codigo};
 
         if(!DB.trabajadores[key]){
-          DB.trabajadores[key] = {dniOriginal, nombre, vinculos:[nuevoVinculo]};
+          DB.trabajadores[key] = {dniOriginal, nombre, correo: correo||null, vinculos:[nuevoVinculo]};
           nuevos++;
         } else {
           const t = DB.trabajadores[key];
           t.dniOriginal = dniOriginal; t.nombre = nombre;
+          if(correo) t.correo = correo; // no se borra un correo ya registrado si esta fila viene vacía
           const ultimo = t.vinculos[t.vinculos.length-1];
           if(ingreso && ultimo.ingreso && ingreso > ultimo.ingreso){
             // reingreso: nuevo vinculo
