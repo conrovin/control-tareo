@@ -390,7 +390,9 @@ async function sincronizarTrabajadoresSharePoint(){
     existentes.forEach(x=>{ const f=x.fields||{}; if(f.Title) porDni[String(f.Title).trim()] = x; });
     for(const t of Object.values(DB.trabajadores||{})){
       try{
-        const fields={Title:t.dniOriginal, Nombre:t.nombre};
+        const ultimo = (t.vinculos && t.vinculos.length) ? t.vinculos[t.vinculos.length-1] : null;
+        const codigo = ultimo && ultimo.codigo!=null ? String(ultimo.codigo) : '';
+        const fields={Title:t.dniOriginal, Nombre:t.nombre, CodigoHapiqa:codigo, Correo:t.correo||''};
         const existing = porDni[t.dniOriginal];
         if(existing){ await graphUpdateListItem('Trabajadores',existing.id,fields); actualizadas++; }
         else { await graphCreateListItem('Trabajadores',fields); creadas++; }
@@ -911,11 +913,17 @@ function renderPadron(){
     </div>
   `;
 }
-function guardarCorreoTrabajador(key, correo){
+async function guardarCorreoTrabajador(key, correo){
   const t = DB.trabajadores[key];
   if(!t) return;
   t.correo = correo.trim();
   saveDB();
+  if(M365.siteUrl && graphToken){
+    try{
+      const existing = await graphFindListItem('Trabajadores',{Title:t.dniOriginal});
+      if(existing){ await graphUpdateListItem('Trabajadores',existing.id,{Correo:t.correo}); }
+    }catch(e){ console.warn('No se pudo sincronizar el correo con SharePoint:',t.dniOriginal,e); }
+  }
 }
 
 function handlePadronFile(input){
