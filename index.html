@@ -521,12 +521,12 @@ async function obtenerCorreosPorRol(rol){
     .filter(f=>String(f.Rol||'').toUpperCase()===rol.toUpperCase() && f.Correo)
     .map(f=>f.Correo);
 }
-async function graphEnviarCorreo(destinatarios, asunto, cuerpoTexto){
+async function graphEnviarCorreo(destinatarios, asunto, cuerpo, esHtml){
   if(!destinatarios || !destinatarios.length) return false;
   const body = {
     message: {
       subject: asunto,
-      body: { contentType: 'Text', content: cuerpoTexto },
+      body: { contentType: esHtml ? 'HTML' : 'Text', content: cuerpo },
       toRecipients: destinatarios.map(d=>({emailAddress:{address:d}}))
     }
   };
@@ -555,7 +555,7 @@ async function loginMicrosoft(){
     document.getElementById('app').style.display='grid';
     document.getElementById('who-user').textContent=role.email;
     document.getElementById('who-rol').textContent=role.rol;
-    buildNav(); goTab(role.rol==='RRHH'?'observaciones':'dashboard');
+    buildNav(); goTabInicial(role.rol==='RRHH'?'observaciones':'dashboard');
   }catch(e){
     console.error('Error de autenticación/Graph:',e);
     msg.innerHTML='<div class="msg-box err">'+escapeHtml(e.message||String(e))+'</div>';
@@ -580,7 +580,7 @@ async function restaurarSesionM365(){
     document.getElementById('app').style.display='grid';
     document.getElementById('who-user').textContent=role.email;
     document.getElementById('who-rol').textContent=role.rol;
-    buildNav(); goTab(role.rol==='RRHH'?'observaciones':'dashboard');
+    buildNav(); goTabInicial(role.rol==='RRHH'?'observaciones':'dashboard');
   }catch(e){
     // La sesión expiró o no se pudo renovar en silencio: se deja la pantalla de login normal.
     console.warn('No se pudo restaurar la sesión Microsoft 365 automáticamente:',e);
@@ -725,10 +725,11 @@ const TABS_ADMIN = [
   ['observaciones','Observaciones'],
   ['txt','Generar TXT'],
   ['historial','Historial'],
-  ['exportaciones','📤 Exportaciones'],
+  ['exportaciones','📊 Reportes'],
 ];
 const TABS_RRHH = [
   ['observaciones','Observaciones'],
+  ['exportaciones','📊 Reportes'],
 ];
 let currentTab = null;
 function buildNav(){
@@ -740,6 +741,12 @@ function goTab(id){
   currentTab = id;
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
   render();
+}
+const TABS_VALIDAS = ['dashboard','padron','talana','francoplan','tareo','alertas-marcacion','observaciones','txt','historial','exportaciones'];
+function goTabInicial(defecto){
+  // Permite enlaces directos desde correo, ej: https://.../index.html#observaciones
+  const hashTab = (window.location.hash||'').replace('#','').trim();
+  goTab(TABS_VALIDAS.includes(hashTab) ? hashTab : defecto);
 }
 function render(){
   const main = document.getElementById('main');
@@ -761,12 +768,12 @@ function render(){
 
 function renderExportaciones(){
   const main=document.getElementById('main');
-  main.innerHTML=`<section id="tab-exportaciones" class="tab-content" style="display:none;">
+  main.innerHTML=`<section id="tab-exportaciones" class="tab-content">
   <div class="card">
     <div class="card-header">
       <div>
-        <h2>📤 Exportaciones</h2>
-        <p class="muted">Genera archivos Excel a partir del tareo procesado.</p>
+        <h2>📊 Reportes</h2>
+        <p class="muted">Genera reportes en Excel a partir del tareo procesado.</p>
       </div>
     </div>
 
@@ -1778,10 +1785,12 @@ async function handleProcesar(){
         try{
           const correosRRHH = await obtenerCorreosPorRol('RRHH');
           if(correosRRHH.length){
-            const cuerpo = `Se generaron ${res.nuevasObsRRHH.length} nueva(s) observación(es) pendiente(s) de regularizar:\n\n`
-              + res.nuevasObsRRHH.map(o=>`- ${o.dni} ${o.nombre} (${o.fecha}): ${o.motivo}`).join('\n')
-              + '\n\nIngresa a Control de Tareo para regularizarlas.';
-            await graphEnviarCorreo(correosRRHH, `Control de Tareo: ${res.nuevasObsRRHH.length} observación(es) pendiente(s)`, cuerpo);
+            const linkObs = window.location.origin + window.location.pathname + '#observaciones';
+            const filas = res.nuevasObsRRHH.map(o=>`<li>${escapeHtml(o.dni)} ${escapeHtml(o.nombre)} (${escapeHtml(o.fecha)}): ${escapeHtml(o.motivo)}</li>`).join('');
+            const cuerpo = `<p>Se generaron ${res.nuevasObsRRHH.length} nueva(s) observación(es) pendiente(s) de regularizar:</p>`
+              + `<ul>${filas}</ul>`
+              + `<p><a href="${linkObs}">Ingresar a Control de Tareo para regularizarlas</a></p>`;
+            await graphEnviarCorreo(correosRRHH, `Control de Tareo: ${res.nuevasObsRRHH.length} observación(es) pendiente(s)`, cuerpo, true);
             syncMsg += ` Se notificó por correo a RR.HH. (${correosRRHH.join(', ')}).`;
           } else {
             syncMsg += ' No se encontró ningún correo con rol RRHH en la lista Roles; no se envió notificación.';
@@ -2131,6 +2140,27 @@ function handleRestoreFile(input){
   }
   function dbArray(name){
     try{
+      // Trabajadores/Vinculos/Talana tienen otro nombre de campo en la base local
+      // (dniOriginal en vez de DNI, vínculos anidados dentro de cada trabajador),
+      // así que aquí se "traducen" a la forma que espera el resto de esta función.
+      if(name==='trabajadores' && window.DB && DB.trabajadores){
+        return Object.values(DB.trabajadores).map(t=>({
+          DNI: t.dniOriginal, Nombre: t.nombre, Correo: t.correo,
+          CodigoHapiqa: (t.vinculos && t.vinculos.length) ? t.vinculos[t.vinculos.length-1].codigo : ''
+        }));
+      }
+      if(name==='vinculos' && window.DB && DB.trabajadores){
+        const out=[];
+        Object.values(DB.trabajadores).forEach(t=>{
+          (t.vinculos||[]).forEach(v=>{
+            out.push({DNI:t.dniOriginal, FechaIngreso:v.ingreso, FechaCese:v.cese, Cargo:v.cargo, Proyecto:v.proyecto, Item:v.item, Estado:v.estado, Codigo:v.codigo});
+          });
+        });
+        return out;
+      }
+      if(name==='talana' && window.DB && DB.talana){
+        return Object.values(DB.talana).map(r=>({DNI:r.dniOriginal, Fecha:r.fecha, Entrada:r.entrada, Salida:r.salida}));
+      }
       if(window.DB && Array.isArray(DB[name])) return DB[name];
       if(window.DB && DB[name] && typeof DB[name]==='object') return Object.values(DB[name]);
       if(window.DB && DB._sharepoint && Array.isArray(DB._sharepoint[name])) return DB._sharepoint[name];
