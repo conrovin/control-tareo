@@ -407,7 +407,7 @@ async function sincronizarVinculosSharePoint(){
   try{
     // Un mismo trabajador (DNI) puede tener varios vínculos (reingresos), así que la
     // clave para identificar cada uno sin duplicar es DNI + fecha de ingreso.
-    const existentes = await graphListItems('Vinculos','Title,FechaIngreso,FechaCese,Cargo,RegimenLaboral,Proyecto,Item,Estado');
+    const existentes = await graphListItems('Vinculos','Title,FechaIngreso,FechaCese,Cargo,RegimenLaboral,Proyecto,Item,Estado,CentroCosto');
     const porClave = {};
     existentes.forEach(x=>{
       const f=x.fields||{};
@@ -429,7 +429,8 @@ async function sincronizarVinculosSharePoint(){
             RegimenLaboral: v.regimen!=null ? String(v.regimen) : '',
             Proyecto: v.proyecto!=null ? String(v.proyecto) : '',
             Item: v.item!=null ? String(v.item) : '',
-            Estado: v.estado!=null ? String(v.estado) : ''
+            Estado: v.estado!=null ? String(v.estado) : '',
+            CentroCosto: v.centroCosto!=null ? String(v.centroCosto) : ''
           };
           const existing = porClave[clave];
           if(existing){ await graphUpdateListItem('Vinculos',existing.id,fields); actualizadas++; }
@@ -769,25 +770,16 @@ function render(){
 function renderExportaciones(){
   const main=document.getElementById('main');
   main.innerHTML=`<section id="tab-exportaciones" class="tab-content">
-  <div class="card">
-    <div class="card-header">
-      <div>
-        <h2>📊 Reportes</h2>
-        <p class="muted">Genera reportes en Excel a partir del tareo procesado.</p>
-      </div>
-    </div>
+  <h2 class="page-title">📊 Reportes</h2>
+  <p class="page-sub">Genera reportes en Excel a partir del tareo procesado.</p>
 
-    <div class="grid-form">
-      <div class="form-group">
-        <label for="expFechaInicio">Desde</label>
-        <input type="date" id="expFechaInicio">
-      </div>
-      <div class="form-group">
-        <label for="expFechaFin">Hasta</label>
-        <input type="date" id="expFechaFin">
-      </div>
-      <div class="form-group">
-        <label for="expTipo">Tipo de exportación</label>
+  <div class="panel">
+    <h3>Generar reporte</h3>
+    <div class="row">
+      <div class="field"><label>Desde</label><input type="date" id="expFechaInicio"></div>
+      <div class="field"><label>Hasta</label><input type="date" id="expFechaFin"></div>
+      <div class="field">
+        <label>Tipo de reporte</label>
         <select id="expTipo">
           <option value="tareo">Excel – Tareo mensual</option>
           <option value="observaciones">Excel – Observaciones</option>
@@ -796,37 +788,25 @@ function renderExportaciones(){
         </select>
       </div>
     </div>
-
-    <div class="grid-form" style="margin-top:12px;">
-      <div class="form-group">
-        <label for="expProyecto">Proyecto (opcional)</label>
-        <input type="text" id="expProyecto" placeholder="Todos">
-      </div>
-      <div class="form-group">
-        <label for="expItem">Item (opcional)</label>
-        <input type="text" id="expItem" placeholder="Todos">
-      </div>
-      <div class="form-group">
-        <label for="expDni">Trabajador / DNI (opcional)</label>
-        <input type="text" id="expDni" placeholder="Todos">
-      </div>
+    <div class="row" style="margin-top:12px;">
+      <div class="field"><label>Centro de Costo (opcional)</label><input type="text" id="expCentroCosto" placeholder="Todos"></div>
+      <div class="field"><label>Trabajador / DNI (opcional)</label><input type="text" id="expDni" placeholder="Todos"></div>
     </div>
-
-    <div style="margin-top:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-      <button class="btn btn-primary" type="button" onclick="generarExportacionExcel()">⬇️ Generar Excel</button>
-      <span id="expEstado" class="muted">Selecciona el periodo y genera el archivo.</span>
+    <div class="row" style="margin-top:16px;">
+      <button class="btn" type="button" onclick="generarExportacionExcel()">⬇️ Generar Excel</button>
+      <span id="expEstado" style="font-size:12.8px;color:var(--muted);">Selecciona el periodo y genera el archivo.</span>
     </div>
   </div>
 
-  <div class="card" style="margin-top:16px;">
+  <div class="panel">
     <h3>Formato del Excel de Tareo</h3>
-    <p class="muted">
+    <p style="font-size:12.8px;color:var(--muted);">
       La exportación de Tareo usa una fila por trabajador y una columna por cada fecha del periodo,
       conservando los datos del trabajador y las marcas procesadas por el motor.
     </p>
-    <div class="muted" style="font-size:13px;">
+    <p style="font-size:12.8px;color:var(--muted);margin:6px 0 0;">
       Marcas contempladas: 10, 12, DL, VA, FE, P1, DM y TL.
-    </div>
+    </p>
   </div>
 </section>`;
 }
@@ -978,6 +958,7 @@ function handlePadronFile(input){
       const colItem = lastHeaderCol(headers, ['Item','Ítem']);
       const colCodigo = findHeaderCol(headers, ['Código','Codigo']);
       const colCorreo = findHeaderCol(headers, ['Correo','Correo Electrónico','Correo Electronico','E-mail','Email']);
+      const colCentroCosto = findHeaderCol(headers, ['Centro de Costo','Centro Costo','CenCos']);
 
       if(colDni<0 || colIngreso<0){
         msgEl.innerHTML = `<div class="msg-box err">No se encontraron las columnas esperadas (Núm.Doc. / Fec.Ing.) en la primera hoja. Verifique la estructura del archivo del padrón.</div>`;
@@ -1002,8 +983,9 @@ function handlePadronFile(input){
         const item = colItem>=0 ? row[colItem] : null;
         const codigo = colCodigo>=0 ? row[colCodigo] : null;
         const correo = colCorreo>=0 ? String(row[colCorreo]||'').trim() : '';
+        const centroCosto = colCentroCosto>=0 ? row[colCentroCosto] : null;
 
-        const nuevoVinculo = {ingreso, cese, cargo, regimen, estado, proyecto, item, codigo};
+        const nuevoVinculo = {ingreso, cese, cargo, regimen, estado, proyecto, item, codigo, centroCosto};
 
         if(!DB.trabajadores[key]){
           DB.trabajadores[key] = {dniOriginal, nombre, correo: correo||null, vinculos:[nuevoVinculo]};
@@ -1023,6 +1005,7 @@ function handlePadronFile(input){
             ultimo.cese = cese; ultimo.cargo = cargo; ultimo.regimen = regimen;
             ultimo.estado = estado; ultimo.proyecto = proyecto; ultimo.item = item;
             ultimo.codigo = codigo;
+            ultimo.centroCosto = centroCosto;
             if(ingreso) ultimo.ingreso = ingreso;
             actualizados++;
           }
@@ -1482,6 +1465,7 @@ function procesarAlertasMarcacion(fechaIso){
   const d = new Date(fechaIso+'T00:00:00');
   const fpVersion = getFrancoplanVigenteParaFecha(fechaIso);
   let generadas=0, resueltas=0, sinCambio=0;
+  const nuevasAlertas = [];
 
   for(const key of Object.keys(DB.trabajadores)){
     const trabajador = DB.trabajadores[key];
@@ -1514,23 +1498,39 @@ function procesarAlertasMarcacion(fechaIso){
       DB.alertasMarcacion[amKey] = {
         dniKey:key, dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:fechaIso,
         estado:'PENDIENTE', canal:'CORREO', correo: trabajador.correo||null,
-        notificado: !!trabajador.correo, fechaHoraNotificacion: todayIso(),
+        notificado:false, fechaHoraNotificacion:null,
         fechaHoraResolucion:null, observacionVinculada:false
       };
+      nuevasAlertas.push(DB.alertasMarcacion[amKey]);
       generadas++;
     } else {
       sinCambio++; // ya estaba notificado: NO reenviar la alerta
     }
   }
   saveDB();
-  return {generadas, resueltas, sinCambio};
+  return {generadas, resueltas, sinCambio, nuevasAlertas};
+}
+
+async function enviarNotificacionAlerta(a){
+  if(!a.correo) return false;
+  const m = mensajeAlertaMarcacion(a.nombre);
+  const cuerpoHtml = `<p>${escapeHtml(m.cuerpo).replace(/\n/g,'<br>')}</p>`;
+  try{
+    await graphEnviarCorreo([a.correo], m.asunto, cuerpoHtml, true);
+    a.notificado = true;
+    a.fechaHoraNotificacion = todayIso();
+    return true;
+  }catch(e){
+    console.warn('No se pudo enviar la alerta de marcación a', a.correo, e);
+    return false;
+  }
 }
 
 function mensajeAlertaMarcacion(nombre){
   const primerNombre = (nombre||'').trim().split(/\s+/)[0] || '';
   return {
     asunto: 'Alerta de marcación de asistencia',
-    cuerpo: `Hola ${primerNombre},\n\nDurante la revisión de asistencia se ha detectado que actualmente no figura una marcación correspondiente al día de hoy.\n\nPor favor, verifica tu marcación y regularízala según corresponda.\n\nSi ya realizaste tu marcación, puedes ignorar este mensaje.\n\nSaludos.`
+    cuerpo: `Hola ${primerNombre},\n\nDurante la revisión de asistencia se ha detectado que actualmente no figura una marcación correspondiente al día de hoy.\n\nPor favor, verifica tu marcación y regularízala según corresponda.\n\nSi ya realizaste tu marcación, puedes ignorar este mensaje.\n\nSaludos.\nCONSORCIO ROVELLA INMAC`
   };
 }
 function mailtoAlertaMarcacion(a){
@@ -1662,9 +1662,11 @@ function renderTablaAlertas(){
         else if(a.estado==='RESUELTA') badge = '<span class="badge ok">🟢 Resuelta</span>';
         else badge = '<span class="badge danger">🔴 Escalada</span>';
         const mailto = mailtoAlertaMarcacion(a);
-        const notif = a.notificado
-          ? (mailto ? `Correo listo — <a href="${mailto}" target="_blank">abrir en Outlook</a>` : 'Correo enviado')
-          : '<span style="color:var(--danger)">Sin correo registrado (ver pestaña Padrón)</span>';
+        const notif = !a.correo
+          ? '<span style="color:var(--danger)">Sin correo registrado (ver pestaña Padrón)</span>'
+          : a.notificado
+            ? `✅ Enviado${a.fechaHoraNotificacion ? ' ('+new Date(a.fechaHoraNotificacion).toLocaleString('es-PE')+')' : ''}`
+            : `⚠️ No se pudo enviar — <a href="${mailto}" target="_blank">abrir en Outlook</a>`;
         const amKey = a.dniKey+'|'+a.fecha;
         return `<tr>
           <td>${toDisplayDate(a.fecha)}</td>
@@ -1685,12 +1687,25 @@ async function handleProcesarAlertas(){
   if(!fecha){ msgEl.innerHTML = `<div class="msg-box err">Selecciona una fecha.</div>`; return; }
   if(Object.keys(DB.trabajadores).length===0){ msgEl.innerHTML = `<div class="msg-box err">Debe cargar el padrón antes de detectar alertas.</div>`; return; }
   const res = procesarAlertasMarcacion(fecha);
+
+  let enviados=0, sinCorreo=0, fallidos=0;
+  if(M365.siteUrl && graphToken){
+    for(const a of res.nuevasAlertas){
+      if(!a.correo){ sinCorreo++; continue; }
+      const ok = await enviarNotificacionAlerta(a);
+      if(ok) enviados++; else fallidos++;
+    }
+    saveDB();
+  } else {
+    sinCorreo = res.nuevasAlertas.length; // sin sesión M365 no se puede enviar nada todavía
+  }
+
   let syncMsg='';
   if(M365.siteUrl && graphToken){
     const sp=await sincronizarAlertasSharePoint();
     syncMsg=` Se sincronizaron ${sp.creadas} nueva(s) y ${sp.actualizadas} existente(s) con SharePoint.`;
   }
-  msgEl.innerHTML = `<div class="msg-box ok">${res.generadas} alerta(s) nueva(s) generada(s), ${res.resueltas} resuelta(s) por nueva marcación, ${res.sinCambio} ya estaban notificadas (no se reenviaron).${syncMsg}</div>`;
+  msgEl.innerHTML = `<div class="msg-box ok">${res.generadas} alerta(s) nueva(s) generada(s): ${enviados} correo(s) enviado(s), ${sinCorreo} sin correo registrado${fallidos?`, ${fallidos} con error al enviar (revisa la tabla)`:''}. ${res.resueltas} resuelta(s) por nueva marcación, ${res.sinCambio} ya estaban notificadas (no se reenviaron).${syncMsg}</div>`;
   document.getElementById('am-tabla-panel').innerHTML = renderTablaAlertas();
 }
 
@@ -2153,7 +2168,7 @@ function handleRestoreFile(input){
         const out=[];
         Object.values(DB.trabajadores).forEach(t=>{
           (t.vinculos||[]).forEach(v=>{
-            out.push({DNI:t.dniOriginal, FechaIngreso:v.ingreso, FechaCese:v.cese, Cargo:v.cargo, Proyecto:v.proyecto, Item:v.item, Estado:v.estado, Codigo:v.codigo});
+            out.push({DNI:t.dniOriginal, FechaIngreso:v.ingreso, FechaCese:v.cese, Cargo:v.cargo, Proyecto:v.proyecto, Item:v.item, Estado:v.estado, Codigo:v.codigo, CentroCosto:v.centroCosto});
           });
         });
         return out;
@@ -2212,8 +2227,7 @@ function handleRestoreFile(input){
       if(!ini || !fin || ini>fin){ estado.textContent='⚠️ Selecciona un periodo válido.'; return; }
 
       const tipo=document.getElementById('expTipo').value;
-      const proyecto=(document.getElementById('expProyecto').value||'').trim().toUpperCase();
-      const item=(document.getElementById('expItem').value||'').trim().toUpperCase();
+      const centroCostoFiltro=(document.getElementById('expCentroCosto').value||'').trim().toUpperCase();
       const dniFiltro=(document.getElementById('expDni').value||'').trim();
 
       let data=[], filename='';
@@ -2227,16 +2241,14 @@ function handleRestoreFile(input){
           const v=getVinculo(dni,ini) || {};
           return {dni,w,v};
         }).filter(r=>{
-          const p=String(firstVal(r.v,['Proyecto','proyecto'])).toUpperCase();
-          const it=String(firstVal(r.v,['Item','item'])).toUpperCase();
+          const cc=String(firstVal(r.v,['CentroCosto','centroCosto'])).toUpperCase();
           return (!dniFiltro || r.dni===dniFiltro) &&
-                 (!proyecto || p===proyecto) &&
-                 (!item || it===item);
+                 (!centroCostoFiltro || cc===centroCostoFiltro);
         });
 
         const head=[
           'Itm','Código','Documento','Nombre del Trabajador','Fec.Ing.','Fec.Ces.',
-          'Marcas','Centro de Costo Actual','Centro de Costo Tareo',
+          'Marcas','Centro de Costo',
           ...fechas.map(fmtDMY)
         ];
         data.push(head);
@@ -2250,8 +2262,7 @@ function handleRestoreFile(input){
           const count=marks.filter(Boolean).length;
           const ingreso=parseAnyDate(firstVal(v,['FechaIngreso','fechaIngreso']));
           const cese=parseAnyDate(firstVal(v,['FechaCese','fechaCese']));
-          const proyectoV=firstVal(v,['Proyecto','proyecto']);
-          const itemV=firstVal(v,['Item','item']);
+          const centroCostoV=firstVal(v,['CentroCosto','centroCosto']);
           data.push([
             idx+1,
             firstVal(w,['CodigoHapiqa','Codigo','codigo']),
@@ -2260,8 +2271,7 @@ function handleRestoreFile(input){
             ingreso?fmtDMY(ingreso):'',
             cese?fmtDMY(cese):'',
             count,
-            proyectoV,
-            proyectoV,
+            centroCostoV,
             ...marks
           ]);
         });
