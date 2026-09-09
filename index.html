@@ -311,7 +311,7 @@ async function obtenerTokenGraph(){
   const app=inicializarMSAL();
   const accounts=app.getAllAccounts();
   if(!accounts.length) throw new Error('No hay sesión Microsoft 365.');
-  const req={scopes:['User.Read','Sites.ReadWrite.All'],account:accounts[0]};
+  const req={scopes:['User.Read','Sites.ReadWrite.All','Mail.Send'],account:accounts[0]};
   try { const r=await app.acquireTokenSilent(req); graphToken=r.accessToken; return r.accessToken; }
   catch(e){ const r=await app.acquireTokenPopup(req); graphToken=r.accessToken; return r.accessToken; }
 }
@@ -515,6 +515,29 @@ async function cargarRolesDesdeSharePoint(){
   if(!found) throw new Error(`El usuario ${email} no está registrado en la lista Roles.`);
   return {email,rol:found.Rol};
 }
+async function obtenerCorreosPorRol(rol){
+  const items = await graphListItems('Roles','Correo,Rol');
+  return items.map(x=>x.fields||{})
+    .filter(f=>String(f.Rol||'').toUpperCase()===rol.toUpperCase() && f.Correo)
+    .map(f=>f.Correo);
+}
+async function graphEnviarCorreo(destinatarios, asunto, cuerpoTexto){
+  if(!destinatarios || !destinatarios.length) return false;
+  const body = {
+    message: {
+      subject: asunto,
+      body: { contentType: 'Text', content: cuerpoTexto },
+      toRecipients: destinatarios.map(d=>({emailAddress:{address:d}}))
+    }
+  };
+  const r = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+    method:'POST',
+    headers:{'Authorization':'Bearer '+graphToken, 'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if(!r.ok){ const t=await r.text().catch(()=> ''); throw new Error('Graph sendMail HTTP '+r.status+': '+t); }
+  return true;
+}
 async function loginMicrosoft(){
   const msg=document.getElementById('login-msg');
   try{
@@ -523,7 +546,7 @@ async function loginMicrosoft(){
 
     // Autenticación + token de Microsoft Graph en una sola solicitud.
     // El consentimiento de administrador ya fue otorgado para estos permisos.
-    const result=await app.loginPopup({scopes:['User.Read','Sites.ReadWrite.All']});
+    const result=await app.loginPopup({scopes:['User.Read','Sites.ReadWrite.All','Mail.Send']});
     graphToken=result.accessToken;
 
     const role=await cargarRolesDesdeSharePoint();
@@ -548,7 +571,7 @@ async function restaurarSesionM365(){
     const accounts=app.getAllAccounts();
     if(!accounts.length) return; // nunca inició sesión en este navegador, o ya la cerró
 
-    const result=await app.acquireTokenSilent({scopes:['User.Read','Sites.ReadWrite.All'],account:accounts[0]});
+    const result=await app.acquireTokenSilent({scopes:['User.Read','Sites.ReadWrite.All','Mail.Send'],account:accounts[0]});
     graphToken=result.accessToken;
 
     const role=await cargarRolesDesdeSharePoint();
@@ -1318,13 +1341,14 @@ function addObservacion(tipo, dniKeyVal, dniOriginal, nombre, fecha, motivo){
   const existe = DB.observaciones.find(o=>o.id===id);
   if(existe){
     existe.motivo = motivo; existe.nombre = nombre; existe.dni = dniOriginal;
-    return;
+    return false; // ya existía, no es nueva
   }
   DB.observaciones.push({
     id, dniKey:dniKeyVal, dni:dniOriginal, nombre, fecha, tipo, motivo,
     estado: tipo==='RRHH' ? 'PENDIENTE' : 'INFORMATIVA',
     codigoReg:null, usuarioReg:null, fechaHoraReg:null
   });
+  return true; // es nueva
 }
 
 function procesarRango(fechaIniIso, fechaFinIso){
@@ -1333,6 +1357,7 @@ function procesarRango(fechaIniIso, fechaFinIso){
   if(fin<ini) return {error:'El rango de fechas es inválido.'};
 
   let dias=0, correctos=0, obsRRHH=0, alertasAdmin=0, ignorados=0;
+  const nuevasObsRRHH = [];
 
   for(let d=new Date(ini); d<=fin; d.setDate(d.getDate()+1)){
     const iso = isoDate(d);
@@ -1392,7 +1417,8 @@ function procesarRango(fechaIniIso, fechaFinIso){
         DB.tareo[tareoKey] = {dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:iso, fcCode:fcVal, marco, estado:'CORRECTO', marca:resultado.marca, proyecto:vinculo.proyecto, item:vinculo.item, cargo};
         correctos++;
       } else {
-        addObservacion('RRHH', key, trabajador.dniOriginal, trabajador.nombre, iso, resultado.motivo);
+        const esNueva = addObservacion('RRHH', key, trabajador.dniOriginal, trabajador.nombre, iso, resultado.motivo);
+        if(esNueva) nuevasObsRRHH.push({dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:iso, motivo:resultado.motivo});
         DB.tareo[tareoKey] = {dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:iso, fcCode:fcVal, marco, estado:'OBSERVACION_RRHH', motivo:resultado.motivo, proyecto:vinculo.proyecto, item:vinculo.item, cargo};
         obsRRHH++;
         // Si esta observación definitiva viene de una alerta de marcación preventiva que
@@ -1411,7 +1437,7 @@ function procesarRango(fechaIniIso, fechaFinIso){
   saveDB();
   DB.historial.procesos.push({fecha: todayIso(), usuario:SESSION.user, rango:`${fechaIniIso} — ${fechaFinIso}`, correctos, obsRRHH, alertasAdmin, ignorados});
   saveDB();
-  return {dias, correctos, obsRRHH, alertasAdmin, ignorados};
+  return {dias, correctos, obsRRHH, alertasAdmin, ignorados, nuevasObsRRHH};
 }
 
 /* CASO 1 (ampliado): Francoplan=trabajo + Talana=sin marcación genera observación "SIN MARCACIÓN".
@@ -1655,7 +1681,7 @@ async function handleProcesarAlertas(){
   let syncMsg='';
   if(M365.siteUrl && graphToken){
     const sp=await sincronizarAlertasSharePoint();
-    syncMsg=` Se sincronizaron ${sp.creadas} nueva(s) y ${sp.actualizadas} existente(s) con SharePoint; Power Automate realizará el envío del correo.`;
+    syncMsg=` Se sincronizaron ${sp.creadas} nueva(s) y ${sp.actualizadas} existente(s) con SharePoint.`;
   }
   msgEl.innerHTML = `<div class="msg-box ok">${res.generadas} alerta(s) nueva(s) generada(s), ${res.resueltas} resuelta(s) por nueva marcación, ${res.sinCambio} ya estaban notificadas (no se reenviaron).${syncMsg}</div>`;
   document.getElementById('am-tabla-panel').innerHTML = renderTablaAlertas();
@@ -1741,15 +1767,37 @@ async function handleProcesar(){
   const msgEl = document.getElementById('proc-msg');
   if(!ini || !fin){ msgEl.innerHTML = `<div class="msg-box err">Seleccione un rango de fechas.</div>`; return; }
   if(Object.keys(DB.trabajadores).length===0){ msgEl.innerHTML = `<div class="msg-box err">Debe cargar el padrón antes de procesar.</div>`; return; }
-  const res = procesarRango(ini, fin);
-  if(res.error){ msgEl.innerHTML = `<div class="msg-box err">${res.error}</div>`; return; }
-  let syncMsg='';
-  if(M365.siteUrl && graphToken){
-    const spObs=await sincronizarObservacionesSharePoint();
-    syncMsg=` Se sincronizaron ${spObs.creadas} nueva(s) y ${spObs.actualizadas} existente(s) con SharePoint; el flujo de RRHH enviará la notificación automáticamente.`;
+  try{
+    const res = procesarRango(ini, fin);
+    if(res.error){ msgEl.innerHTML = `<div class="msg-box err">${res.error}</div>`; return; }
+    let syncMsg='';
+    if(M365.siteUrl && graphToken){
+      const spObs=await sincronizarObservacionesSharePoint();
+      syncMsg=` Se sincronizaron ${spObs.creadas} nueva(s) y ${spObs.actualizadas} existente(s) con SharePoint.`;
+      if(res.nuevasObsRRHH && res.nuevasObsRRHH.length){
+        try{
+          const correosRRHH = await obtenerCorreosPorRol('RRHH');
+          if(correosRRHH.length){
+            const cuerpo = `Se generaron ${res.nuevasObsRRHH.length} nueva(s) observación(es) pendiente(s) de regularizar:\n\n`
+              + res.nuevasObsRRHH.map(o=>`- ${o.dni} ${o.nombre} (${o.fecha}): ${o.motivo}`).join('\n')
+              + '\n\nIngresa a Control de Tareo para regularizarlas.';
+            await graphEnviarCorreo(correosRRHH, `Control de Tareo: ${res.nuevasObsRRHH.length} observación(es) pendiente(s)`, cuerpo);
+            syncMsg += ` Se notificó por correo a RR.HH. (${correosRRHH.join(', ')}).`;
+          } else {
+            syncMsg += ' No se encontró ningún correo con rol RRHH en la lista Roles; no se envió notificación.';
+          }
+        }catch(e){
+          console.error('No se pudo enviar el correo a RR.HH.:', e);
+          syncMsg += ' (No se pudo enviar el correo de notificación a RR.HH.; revisa la consola.)';
+        }
+      }
+    }
+    msgEl.innerHTML = `<div class="msg-box ok">Procesado ${res.dias} día(s): ${res.correctos} correctos, ${res.obsRRHH} observaciones para RR.HH., ${res.alertasAdmin} alertas para Administración, ${res.ignorados} registros ignorados por vigencia.${syncMsg}</div>`;
+    renderTareo();
+  }catch(err){
+    console.error(err);
+    msgEl.innerHTML = `<div class="msg-box err">Error al procesar: ${escapeHtml(err.message)}</div>`;
   }
-  msgEl.innerHTML = `<div class="msg-box ok">Procesado ${res.dias} día(s): ${res.correctos} correctos, ${res.obsRRHH} observaciones para RR.HH., ${res.alertasAdmin} alertas para Administración, ${res.ignorados} registros ignorados por vigencia.${syncMsg}</div>`;
-  renderTareo();
 }
 
 /* ==========================================================
