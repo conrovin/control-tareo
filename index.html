@@ -93,7 +93,7 @@
   .login-hint{margin-top:10px; font-size:11.5px; color:var(--muted);}
 
   #app{display:none; min-height:100vh; grid-template-columns:220px 1fr;}
-  nav{background:var(--ink); color:#eee; padding:0; display:flex; flex-direction:column;}
+  nav{background:var(--ink); color:#eee; padding:0; display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto;}
   nav .brand{
     padding:24px 20px 18px; font-size:17px; font-weight:800; letter-spacing:-.01em; color:#fff;
   }
@@ -949,6 +949,7 @@ function handlePadronFile(input){
       const headers = aoa[0].map(h=>h===null?'':h);
       const colDni = findHeaderCol(headers, ['Núm.Doc.','Num.Doc.','DNI']);
       const colNombre = findHeaderCol(headers, ['Nombre de Trabajador','Nombre','Apellidos y Nombres']);
+      const colNombrePila = findHeaderCol(headers, ['Nombre']); // solo nombres (sin apellidos), para saludos personalizados
       const colEstado = findHeaderCol(headers, ['Estado']);
       const colIngreso = findHeaderCol(headers, ['Fec.Ing.','Fecha Ingreso']);
       const colCese = findHeaderCol(headers, ['Fec.Ces.','Fecha Cese']);
@@ -974,6 +975,7 @@ function handlePadronFile(input){
         const dniOriginal = String(dniRaw).trim();
         const key = dniKey(dniOriginal);
         const nombre = colNombre>=0 ? String(row[colNombre]||'').trim() : '(sin nombre)';
+        const nombrePila = colNombrePila>=0 ? String(row[colNombrePila]||'').trim() : '';
         const ingreso = colIngreso>=0 ? parseExcelDateCell(row[colIngreso]) : null;
         const cese = colCese>=0 ? parseExcelDateCell(row[colCese]) : null;
         const cargo = colCargo>=0 ? String(row[colCargo]||'').trim().toUpperCase() : '';
@@ -988,11 +990,12 @@ function handlePadronFile(input){
         const nuevoVinculo = {ingreso, cese, cargo, regimen, estado, proyecto, item, codigo, centroCosto};
 
         if(!DB.trabajadores[key]){
-          DB.trabajadores[key] = {dniOriginal, nombre, correo: correo||null, vinculos:[nuevoVinculo]};
+          DB.trabajadores[key] = {dniOriginal, nombre, nombrePila: nombrePila||null, correo: correo||null, vinculos:[nuevoVinculo]};
           nuevos++;
         } else {
           const t = DB.trabajadores[key];
           t.dniOriginal = dniOriginal; t.nombre = nombre;
+          if(nombrePila) t.nombrePila = nombrePila;
           if(correo) t.correo = correo; // no se borra un correo ya registrado si esta fila viene vacía
           const ultimo = t.vinculos[t.vinculos.length-1];
           if(ingreso && ultimo.ingreso && ingreso > ultimo.ingreso){
@@ -1496,7 +1499,7 @@ function procesarAlertasMarcacion(fechaIso){
     // sigue sin marcar
     if(!existente){
       DB.alertasMarcacion[amKey] = {
-        dniKey:key, dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:fechaIso,
+        dniKey:key, dni:trabajador.dniOriginal, nombre:trabajador.nombre, nombrePila:trabajador.nombrePila||null, fecha:fechaIso,
         estado:'PENDIENTE', canal:'CORREO', correo: trabajador.correo||null,
         notificado:false, fechaHoraNotificacion:null,
         fechaHoraResolucion:null, observacionVinculada:false
@@ -1513,7 +1516,7 @@ function procesarAlertasMarcacion(fechaIso){
 
 async function enviarNotificacionAlerta(a){
   if(!a.correo) return false;
-  const m = mensajeAlertaMarcacion(a.nombre);
+  const m = mensajeAlertaMarcacion(a.nombrePila || a.nombre);
   const cuerpoHtml = `<p>${escapeHtml(m.cuerpo).replace(/\n/g,'<br>')}</p>`;
   try{
     await graphEnviarCorreo([a.correo], m.asunto, cuerpoHtml, true);
