@@ -731,6 +731,12 @@ const TABS_ADMIN = [
   ['exportaciones','📊 Reportes'],
 ];
 const TABS_RRHH = [
+  ['dashboard','Dashboard'],
+  ['padron','Padrón'],
+  ['talana','Talana'],
+  ['francoplan','Francoplan'],
+  ['tareo','Tareo'],
+  ['alertas-marcacion','📢 Alertas de marcación'],
   ['observaciones','Observaciones'],
   ['exportaciones','📊 Reportes'],
 ];
@@ -885,7 +891,6 @@ function findVinculoVigente(trabajador, dateObj){
 }
 
 function renderPadron(){
-  const trabs = Object.values(DB.trabajadores).sort((a,b)=>a.nombre.localeCompare(b.nombre));
   const main = document.getElementById('main');
   main.innerHTML = `
     <h2 class="page-title">Padrón (Hapiqa)</h2>
@@ -896,7 +901,12 @@ function renderPadron(){
       <input type="file" id="file-padron" accept=".xlsx,.xls" onchange="handlePadronFile(this)">
       <div id="padron-msg"></div>
     </div>` : ''}
-    <div class="panel">
+    <div class="panel" id="padron-tabla-panel">${renderTablaPadronHtml()}</div>
+  `;
+}
+function renderTablaPadronHtml(){
+  const trabs = Object.values(DB.trabajadores).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  return `
       <h3>Trabajadores registrados (${trabs.length})</h3>
       <p style="font-size:12px;color:var(--muted)">El correo es necesario para las notificaciones del módulo "Alertas de marcación". Si tu archivo del padrón trae una columna de correo, se carga automáticamente; si algún trabajador no lo trae, puedes escribirlo aquí manualmente.</p>
       ${trabs.length===0 ? '<div class="empty">Aún no se ha cargado ningún padrón.</div>' : `
@@ -922,8 +932,13 @@ function renderPadron(){
         }).join('')}
         </tbody>
       </table></div>`}
-    </div>
   `;
+}
+function refrescarTablaPadron(){
+  // Actualiza solo el panel de la tabla (sin reconstruir toda la pestaña),
+  // así el mensaje de "Padrón procesado..." que se acaba de mostrar no desaparece.
+  const panel = document.getElementById('padron-tabla-panel');
+  if(panel) panel.innerHTML = renderTablaPadronHtml();
 }
 async function guardarCorreoTrabajador(key, correo){
   const t = DB.trabajadores[key];
@@ -1026,7 +1041,7 @@ function handlePadronFile(input){
         syncMsg = ` Se sincronizaron ${sp.creadas} trabajador(es) nuevo(s) y ${sp.actualizadas} actualizado(s), y ${sv.creadas} vínculo(s) nuevo(s) y ${sv.actualizadas} actualizado(s) en SharePoint.`;
       }
       msgEl.innerHTML = `<div class="msg-box ok">Padrón procesado: ${nuevos} trabajadores nuevos, ${actualizados} actualizados, ${reingresos} reingresos detectados, ${ceses} ceses nuevos.${syncMsg}</div>`;
-      renderPadron();
+      refrescarTablaPadron();
     }catch(err){
       console.error(err);
       msgEl.innerHTML = `<div class="msg-box err">Error leyendo el archivo: ${escapeHtml(err.message)}</div>`;
@@ -1043,12 +1058,11 @@ function renderTalana(){
   main.innerHTML = `
     <h2 class="page-title">Talana — Reporte de asistencia</h2>
     <p class="page-sub">Si existe entrada o salida, el trabajador MARCÓ ese día. No se calculan horas, tardanzas ni jornada.</p>
-    ${SESSION.rol!=='RRHH' ? `
     <div class="panel">
       <h3>Cargar reporte Talana</h3>
       <input type="file" id="file-talana" accept=".xlsx,.xls" onchange="handleTalanaFile(this)">
       <div id="talana-msg"></div>
-    </div>` : ''}
+    </div>
     <div class="panel" id="talana-tabla-panel">${renderTablaTalanaHtml()}</div>
   `;
 }
@@ -1165,19 +1179,22 @@ function guessMesAnioFromFilename(name){
 }
 
 function renderFrancoplan(){
-  const meses = Object.keys(DB.francoplan).sort();
   const main = document.getElementById('main');
   main.innerHTML = `
     <h2 class="page-title">Francoplan</h2>
     <p class="page-sub">Planificación de RR.HH. por DNI y fecha. El sistema siempre consulta Talana adicionalmente, incluso ante descansos, vacaciones, feriados, etc.</p>
-    ${SESSION.rol!=='RRHH' ? `
     <div class="panel">
       <h3>Cargar nuevo Francoplan</h3>
       <input type="file" id="file-fp" accept=".xlsx,.xls" onchange="prepareFrancoplanFile(this)">
       <div id="fp-detect" style="margin-top:10px;"></div>
       <div id="fp-msg"></div>
-    </div>` : ''}
-    <div class="panel">
+    </div>
+    <div class="panel" id="fp-versiones-panel">${renderVersionesFrancoplanHtml()}</div>
+  `;
+}
+function renderVersionesFrancoplanHtml(){
+  const meses = Object.keys(DB.francoplan).sort();
+  return `
       <h3>Versiones cargadas</h3>
       ${meses.length===0 ? '<div class="empty">Aún no se ha cargado ningún Francoplan.</div>' : meses.map(mk=>{
         const fp = DB.francoplan[mk];
@@ -1188,8 +1205,13 @@ function renderFrancoplan(){
           </div>
         </div>`;
       }).join('')}
-    </div>
   `;
+}
+function refrescarVersionesFrancoplan(){
+  // Actualiza solo el panel de versiones (sin reconstruir toda la pestaña),
+  // así el mensaje de "Francoplan importado..." que se acaba de mostrar no desaparece.
+  const panel = document.getElementById('fp-versiones-panel');
+  if(panel) panel.innerHTML = renderVersionesFrancoplanHtml();
 }
 
 let pendingFPParse = null;
@@ -1305,7 +1327,7 @@ async function confirmFrancoplanImport(){
     syncMsg = ` Sincronizado con SharePoint: ${sf.creadas} fila(s) nueva(s), ${sf.actualizadas} actualizada(s), ${sf.sinCambios} sin cambios.`;
   }
   msgEl.innerHTML = `<div class="msg-box ok">Francoplan de ${mesKey} importado: ${filas} trabajadores.${syncMsg} ${codigosDesconocidos.size? '<br>⚠ Códigos no reconocidos encontrados: '+[...codigosDesconocidos].map(escapeHtml).join(', ')+'. Se marcarán como alerta al procesar.':''}</div>`;
-  renderFrancoplan();
+  refrescarVersionesFrancoplan();
 }
 
 function clasificarCodigoFP(val){
@@ -2181,13 +2203,13 @@ function handleRestoreFile(input){
       // Trabajadores/Vinculos/Talana tienen otro nombre de campo en la base local
       // (dniOriginal en vez de DNI, vínculos anidados dentro de cada trabajador),
       // así que aquí se "traducen" a la forma que espera el resto de esta función.
-      if(name==='trabajadores' && window.DB && DB.trabajadores){
+      if(name==='trabajadores' && DB && DB.trabajadores){
         return Object.values(DB.trabajadores).map(t=>({
           DNI: t.dniOriginal, Nombre: t.nombre, Correo: t.correo,
           CodigoHapiqa: (t.vinculos && t.vinculos.length) ? t.vinculos[t.vinculos.length-1].codigo : ''
         }));
       }
-      if(name==='vinculos' && window.DB && DB.trabajadores){
+      if(name==='vinculos' && DB && DB.trabajadores){
         const out=[];
         Object.values(DB.trabajadores).forEach(t=>{
           (t.vinculos||[]).forEach(v=>{
@@ -2196,12 +2218,12 @@ function handleRestoreFile(input){
         });
         return out;
       }
-      if(name==='talana' && window.DB && DB.talana){
+      if(name==='talana' && DB && DB.talana){
         return Object.values(DB.talana).map(r=>({DNI:r.dniOriginal, Fecha:r.fecha, Entrada:r.entrada, Salida:r.salida}));
       }
-      if(window.DB && Array.isArray(DB[name])) return DB[name];
-      if(window.DB && DB[name] && typeof DB[name]==='object') return Object.values(DB[name]);
-      if(window.DB && DB._sharepoint && Array.isArray(DB._sharepoint[name])) return DB._sharepoint[name];
+      if(DB && Array.isArray(DB[name])) return DB[name];
+      if(DB && DB[name] && typeof DB[name]==='object') return Object.values(DB[name]);
+      if(DB && DB._sharepoint && Array.isArray(DB._sharepoint[name])) return DB._sharepoint[name];
     }catch(e){}
     return [];
   }
