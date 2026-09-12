@@ -162,6 +162,10 @@
   table td{padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap;}
   table tr:hover td{background:#FAFBFE;}
   .table-wrap{max-height:480px; overflow:auto; border:1px solid var(--line); border-radius:var(--radius);}
+  #padron-tabla-panel table{font-size:11.3px;}
+  #padron-tabla-panel table th{padding:7px 8px;}
+  #padron-tabla-panel table td{padding:6px 8px; white-space:normal;}
+  #padron-tabla-panel table td:first-child, #padron-tabla-panel table th:first-child{white-space:nowrap;}
 
   /* estados como chips redondeados y coloridos — claros de un vistazo */
   .badge{
@@ -674,6 +678,20 @@ function parseExcelDateCell(v){
 function excelTimeCellHasValue(v){
   return v!==undefined && v!==null && v!=='';
 }
+function formatExcelTime(v){
+  // Excel/SheetJS entrega las horas como objeto Date "ancla" (30/12/1899) cuando el
+  // archivo se lee con cellDates:true — aquí solo se toma la parte de hora:minuto:segundo.
+  if(v instanceof Date && !isNaN(v)){
+    return pad2(v.getHours())+':'+pad2(v.getMinutes())+':'+pad2(v.getSeconds());
+  }
+  if(typeof v === 'number'){
+    let totalSeg = Math.round((v%1)*86400);
+    const hh = Math.floor(totalSeg/3600); totalSeg%=3600;
+    const mm = Math.floor(totalSeg/60); const ss = totalSeg%60;
+    return pad2(hh)+':'+pad2(mm)+':'+pad2(ss);
+  }
+  return String(v);
+}
 function findHeaderCol(headers, candidates){
   for(const cand of candidates){
     const idx = headers.findIndex(h => (h||'').toString().trim().toLowerCase() === cand.toLowerCase());
@@ -1156,8 +1174,8 @@ function handleTalanaFile(input){
         const dniOriginal = String(dniRaw).trim();
         const key = dniKey(dniOriginal);
         const mapKey = key+'|'+fecha;
-        const entrada = excelTimeCellHasValue(row[colEntrada]) ? String(row[colEntrada]) : null;
-        const salida = excelTimeCellHasValue(row[colSalida]) ? String(row[colSalida]) : null;
+        const entrada = excelTimeCellHasValue(row[colEntrada]) ? formatExcelTime(row[colEntrada]) : null;
+        const salida = excelTimeCellHasValue(row[colSalida]) ? formatExcelTime(row[colSalida]) : null;
         const nombre = colNombre>=0 ? row[colNombre] : null;
         if(DB.talana[mapKey]) actualizados++; else nuevos++;
         DB.talana[mapKey] = {dniOriginal, fecha, entrada, salida, nombre};
@@ -1691,7 +1709,7 @@ function handleMarcasFile(input){
         fechasVistas.add(fecha);
         const dniOriginal = String(row[colDni]).trim();
         const key = dniKey(dniOriginal)+'|'+fecha;
-        const hora = colHora>=0 ? row[colHora] : null;
+        const hora = (colHora>=0 && excelTimeCellHasValue(row[colHora])) ? formatExcelTime(row[colHora]) : null;
         if(DB.talana[key]){
           if(!DB.talana[key].entrada){ DB.talana[key].entrada = hora || true; entradasActualizadas++; }
         } else {
