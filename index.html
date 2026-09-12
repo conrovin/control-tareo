@@ -8,6 +8,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Control de Tareo</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%93%EF%B8%8F%3C/text%3E%3C/svg%3E">
 
 
@@ -93,23 +94,25 @@
   .login-hint{margin-top:10px; font-size:11.5px; color:var(--muted);}
 
   #app{display:none; min-height:100vh; grid-template-columns:220px 1fr;}
-  nav{background:var(--ink); color:#eee; padding:0; display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto;}
+  nav{background:var(--panel); color:var(--ink); padding:0; display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto; border-right:1px solid var(--line);}
   nav .brand{
-    padding:24px 20px 18px; font-size:17px; font-weight:800; letter-spacing:-.01em; color:#fff;
+    padding:24px 20px 18px; font-size:17px; font-weight:800; letter-spacing:-.01em; color:var(--ink); display:flex; align-items:center; gap:9px;
   }
-  nav .brand small{display:block; font-weight:500; color:#8E93A3; font-size:10.5px; margin-top:4px; letter-spacing:.2px;}
+  nav .brand small{display:block; font-weight:500; color:var(--muted); font-size:10.5px; margin-top:4px; letter-spacing:.2px;}
   nav #tabs{padding:6px 10px;}
   nav button.tab{
-    background:none; border:none; color:#B7BCCB; text-align:left; padding:10px 14px; font-size:13.3px;
-    cursor:pointer; font-family:var(--sans); display:block; width:100%; border-radius:var(--radius-sm);
+    background:none; border:none; color:var(--ink-soft); text-align:left; padding:10px 14px; font-size:13.3px;
+    cursor:pointer; font-family:var(--sans); display:flex; align-items:center; gap:10px; width:100%; border-radius:var(--radius-sm);
     margin-bottom:2px; font-weight:500;
   }
-  nav button.tab:hover{background:rgba(255,255,255,.06); color:#fff;}
-  nav button.tab.active{background:var(--primary); color:#fff; font-weight:700;}
-  nav .who{margin-top:auto; padding:16px 20px 0; border-top:1px solid rgba(255,255,255,.1); font-size:11.5px; color:#8E93A3;}
-  nav .who b{color:#fff;}
-  nav .logout{background:none; border:none; color:#F1A8A0; font-size:12px; cursor:pointer; padding:8px 20px 18px; text-align:left; font-family:var(--sans); font-weight:600;}
-  nav .credit{padding:0 20px 16px; font-size:10.3px; color:#5B6072; letter-spacing:.1px;}
+  nav button.tab i{font-size:16px; color:var(--muted); width:16px; text-align:center;}
+  nav button.tab:hover{background:var(--bg); color:var(--ink);}
+  nav button.tab.active{background:var(--primary-bg); color:var(--primary-deep); font-weight:700;}
+  nav button.tab.active i{color:var(--primary-deep);}
+  nav .who{margin-top:auto; padding:16px 20px 0; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted);}
+  nav .who b{color:var(--ink);}
+  nav .logout{background:none; border:none; color:var(--danger); font-size:12px; cursor:pointer; padding:8px 20px 18px; text-align:left; font-family:var(--sans); font-weight:600;}
+  nav .credit{padding:0 20px 16px; font-size:10.3px; color:var(--muted); letter-spacing:.1px;}
 
   main{padding:30px 36px; overflow-x:auto;}
   h2.page-title{margin:0 0 4px; font-size:23px; color:var(--ink); font-weight:800; letter-spacing:-.02em;}
@@ -204,12 +207,15 @@
 <div id="login-screen">
   <div class="login-card">
     <div class="login-top">
-      <div class="login-icon">🗓️</div>
+      <div class="login-icon">
+        <img src="logo.png" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:inherit;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <i class="ti ti-calendar-event" aria-hidden="true" style="display:none;"></i>
+      </div>
       <h1>Control de Tareo</h1>
       <p class="sub">Conciliación de asistencia — Padrón · Francoplan · Talana</p>
     </div>
     <div class="login-body">
-      <button onclick="loginMicrosoft()">🔐 Ingresar con Microsoft 365</button>
+      <button onclick="loginMicrosoft()"><i class="ti ti-brand-windows" aria-hidden="true" style="font-size:16px;vertical-align:-2px;margin-right:4px;"></i>Ingresar con Microsoft 365</button>
       <div class="login-msg" id="login-msg"></div>
       <div class="login-hint" id="login-hint">La versión conectada usará tu cuenta corporativa y la lista Roles de SharePoint.</div>
       <details style="margin-top:14px">
@@ -230,7 +236,11 @@
 <!-- APP -->
 <div id="app">
   <nav>
-    <div class="brand">Control de Tareo<small>Microsoft 365 · SharePoint</small></div>
+    <div class="brand">
+      <img src="logo.png" alt="Logo" style="width:22px;height:22px;object-fit:contain;border-radius:4px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+      <i class="ti ti-checkbox" aria-hidden="true" style="font-size:19px;color:var(--primary);display:none;"></i>
+      <span>Control de Tareo<small>Microsoft 365 · SharePoint</small></span>
+    </div>
     <div id="tabs"></div>
     <div class="who">Sesión: <b id="who-user"></b><br><span id="who-rol"></span></div>
     <button class="logout" onclick="logout()">Cerrar sesión</button>
@@ -724,11 +734,11 @@ const TABS_ADMIN = [
   ['talana','Talana'],
   ['francoplan','Francoplan'],
   ['tareo','Tareo'],
-  ['alertas-marcacion','📢 Alertas de marcación'],
+  ['alertas-marcacion','Alertas de marcación'],
   ['observaciones','Observaciones'],
   ['txt','Generar TXT'],
   ['historial','Historial'],
-  ['exportaciones','📊 Reportes'],
+  ['exportaciones','Reportes'],
 ];
 const TABS_RRHH = [
   ['dashboard','Dashboard'],
@@ -736,15 +746,21 @@ const TABS_RRHH = [
   ['talana','Talana'],
   ['francoplan','Francoplan'],
   ['tareo','Tareo'],
-  ['alertas-marcacion','📢 Alertas de marcación'],
+  ['alertas-marcacion','Alertas de marcación'],
   ['observaciones','Observaciones'],
-  ['exportaciones','📊 Reportes'],
+  ['exportaciones','Reportes'],
 ];
+const TAB_ICONS = {
+  dashboard:'ti-layout-dashboard', padron:'ti-users', talana:'ti-clock',
+  francoplan:'ti-calendar', tareo:'ti-list-check', 'alertas-marcacion':'ti-bell',
+  observaciones:'ti-message-circle', txt:'ti-file-export', historial:'ti-history',
+  exportaciones:'ti-chart-bar'
+};
 let currentTab = null;
 function buildNav(){
   const tabs = SESSION.rol==='RRHH' ? TABS_RRHH : TABS_ADMIN;
   const el = document.getElementById('tabs');
-  el.innerHTML = tabs.map(([id,label])=>`<button class="tab" data-tab="${id}" onclick="goTab('${id}')">${label}</button>`).join('');
+  el.innerHTML = tabs.map(([id,label])=>`<button class="tab" data-tab="${id}" onclick="goTab('${id}')"><i class="ti ${TAB_ICONS[id]||'ti-point'}" aria-hidden="true"></i>${label}</button>`).join('');
 }
 function goTab(id){
   currentTab = id;
@@ -778,7 +794,7 @@ function render(){
 function renderExportaciones(){
   const main=document.getElementById('main');
   main.innerHTML=`<section id="tab-exportaciones" class="tab-content">
-  <h2 class="page-title">📊 Reportes</h2>
+  <h2 class="page-title"><i class="ti ti-chart-bar" aria-hidden="true" style="font-size:19px;vertical-align:-3px;margin-right:6px;color:var(--primary);"></i>Reportes</h2>
   <p class="page-sub">Genera reportes en Excel a partir del tareo procesado.</p>
 
   <div class="panel">
@@ -801,7 +817,7 @@ function renderExportaciones(){
       <div class="field"><label>Trabajador / DNI (opcional)</label><input type="text" id="expDni" placeholder="Todos"></div>
     </div>
     <div class="row" style="margin-top:16px;">
-      <button class="btn" type="button" onclick="generarExportacionExcel()">⬇️ Generar Excel</button>
+      <button class="btn" type="button" onclick="generarExportacionExcel()"><i class="ti ti-download" aria-hidden="true" style="font-size:15px;vertical-align:-2px;margin-right:4px;"></i>Generar Excel</button>
       <span id="expEstado" style="font-size:12.8px;color:var(--muted);">Selecciona el periodo y genera el archivo.</span>
     </div>
   </div>
@@ -851,7 +867,7 @@ function renderDashboard(){
       <div class="card"><div class="num">${ultTxt ? toDisplayDate(ultTxt.fecha.split('T')[0]) : '—'}</div><div class="lbl">Último TXT generado</div></div>
     </div>
     <div class="panel">
-      <h3>📢 Alertas de marcación — hoy (${toDisplayDate(hoyIso)})</h3>
+      <h3><i class="ti ti-bell" aria-hidden="true" style="font-size:16px;vertical-align:-2px;margin-right:6px;color:var(--warn);"></i>Alertas de marcación — hoy (${toDisplayDate(hoyIso)})</h3>
       <p style="font-size:12.8px;color:var(--muted)">🟡 ${amPendientes} trabajador(es) todavía no registran marcación hoy.</p>
       <div class="cards">
         <div class="card warn"><div class="num">${amPendientes}</div><div class="lbl">Pendientes</div></div>
@@ -1587,7 +1603,7 @@ function renderAlertasMarcacion(){
   const hoyIso = isoDate(new Date());
   const main = document.getElementById('main');
   main.innerHTML = `
-    <h2 class="page-title">📢 Alertas de marcación</h2>
+    <h2 class="page-title"><i class="ti ti-bell" aria-hidden="true" style="font-size:19px;vertical-align:-3px;margin-right:6px;color:var(--primary);"></i>Alertas de marcación</h2>
     <p class="page-sub">Control preventivo durante el día: avisa a quien debía trabajar y aún no registra marcación en Talana. No reemplaza ni duplica la observación definitiva de RR.HH. — esta se genera solo cuando se ejecuta el procesamiento del tareo (pestaña "Tareo").</p>
     <div class="panel">
       <h3>1. Cargar reporte de marcas del mediodía</h3>
