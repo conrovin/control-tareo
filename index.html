@@ -175,6 +175,7 @@
   .badge.ok{background:var(--success-bg); color:var(--success);}
   .badge.warn{background:var(--warn-bg); color:var(--warn);}
   .badge.danger{background:var(--danger-bg); color:var(--danger);}
+  .badge.info{background:var(--primary-bg); color:var(--primary-deep);}
   .badge.muted{background:#EEF0F5; color:var(--muted);}
 
   .empty{padding:34px; text-align:center; color:var(--muted); font-size:13.3px;}
@@ -430,7 +431,7 @@ async function sincronizarObservacionesSharePoint(){
   for(const o of DB.observaciones||[]){
     try{
       const existing=await graphFindListItem('Observaciones',{Title:o.dni,Fecha:o.fecha,Tipo:o.tipo});
-      const fields={Title:o.dni,Fecha:o.fecha,Tipo:o.tipo,Motivo:o.motivo,Estado:o.estado==='REGULARIZADA'?'Regularizada':o.estado==='INFORMATIVA'?'Informativa':'Pendiente'};
+      const fields={Title:o.dni,Fecha:o.fecha,Tipo:o.tipo,Motivo:o.motivo,Estado:(o.estado==='REGULARIZADA'||o.estado==='RESUELTA_AUTOMATICA')?'Regularizada':o.estado==='INFORMATIVA'?'Informativa':'Pendiente'};
       if(existing){ await graphUpdateListItem('Observaciones',existing.id,fields); actualizadas++; }
       else { await graphCreateListItem('Observaciones',fields); creadas++; }
     }catch(e){ console.warn('No se pudo sincronizar observación con SharePoint:',o,e); }
@@ -777,11 +778,12 @@ function flashPanel(idOrEl){
 function freshDB(){
   return {
     trabajadores: {},   // dniKey -> {dniOriginal, nombre, correo, vinculos:[...]}
-    talana: {},         // "dniKey|fecha" -> {entrada, salida, dniOriginal, fecha, nombre}
+    talana: {},         // "dniKey|fecha" -> {entrada, salida, dniOriginal, fecha, nombre} — SOLO viene de la carga/importación del reporte oficial de Talana
     francoplan: {},      // "AAAA-MM" -> {versions:[{rev,filename,fechaCarga,mesLabel,data:{dniKey:{fecha:code}}}]}
     tareo: {},           // "dniKey|fecha" -> registro procesado
     observaciones: [],   // lista {id,dniKey,dni,nombre,fecha,tipo,motivo,estado,codigoReg,usuarioReg,fechaHoraReg}
     alertasMarcacion: {}, // "dniKey|fecha" -> {dni,nombre,fecha,estado:PENDIENTE|RESUELTA|ESCALADA,canal,notificado,fechaHoraNotificacion,fechaHoraResolucion,observacionVinculada}
+    marcasManuales: {},  // "dniKey|fecha" -> {dniOriginal,fecha,entrada,nombre} — SOLO del "listado de marcas" de Alertas de Marcación; NUNCA debe mezclarse con DB.talana
 
     historial: { cargas:[], procesos:[], txts:[] },
     lastTxt: null
@@ -795,6 +797,7 @@ function loadDB(){
     DB = freshDB();
   }
   if(!DB.alertasMarcacion) DB.alertasMarcacion = {};
+  if(!DB.marcasManuales) DB.marcasManuales = {};
 }
 function saveDB(){
   localStorage.setItem(DB_KEY, JSON.stringify(DB));
@@ -1509,6 +1512,16 @@ function talanaMarco(key, fecha){
   if(!rec) return false;
   return !!(rec.entrada || rec.salida);
 }
+// Usada SOLO por Alertas de Marcación (control preventivo durante el día): considera una
+// marcación válida tanto si ya está en el reporte oficial de Talana como si viene del
+// "listado de marcas" cargado aparte. Es de solo LECTURA de ambas fuentes — nunca escribe
+// en DB.talana. El motor de Tareo (procesarRango) sigue usando talanaMarco() a secas,
+// exclusivamente contra el reporte oficial de Talana, sin ningún cambio.
+function marcoParaAlerta(key, fecha){
+  if(talanaMarco(key, fecha)) return true;
+  const rec = DB.marcasManuales[key+'|'+fecha];
+  return !!(rec && rec.entrada);
+}
 
 function addObservacion(tipo, dniKeyVal, dniOriginal, nombre, fecha, motivo){
   const id = dniKeyVal+'|'+fecha+'|'+tipo;
@@ -1531,7 +1544,7 @@ function procesarRango(fechaIniIso, fechaFinIso){
   const fin = new Date(fechaFinIso+'T00:00:00');
   if(fin<ini) return {error:'El rango de fechas es inválido.'};
 
-  let dias=0, correctos=0, obsRRHH=0, alertasAdmin=0, ignorados=0;
+  let dias=0, correctos=0, obsRRHH=0, alertasAdmin=0, ignorados=0, resueltasAutomaticas=0;
   const nuevasObsRRHH = [];
 
   for(let d=new Date(ini); d<=fin; d.setDate(d.getDate()+1)){
@@ -1591,6 +1604,21 @@ function procesarRango(fechaIniIso, fechaFinIso){
       if(resultado.estado==='CORRECTO'){
         DB.tareo[tareoKey] = {dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:iso, fcCode:fcVal, marco, estado:'CORRECTO', marca:resultado.marca, proyecto:vinculo.proyecto, item:vinculo.item, cargo};
         correctos++;
+        // Si había quedado una observación RR.HH. pendiente por "SIN MARCACIÓN" y al
+        // reprocesar ahora sí se encontró una marcación válida en Talana, se resuelve
+        // automáticamente. Se conserva el historial completo (no se borra ni se crea una
+        // observación nueva), se deja constancia de que la resolvió el SISTEMA (no una
+        // persona) y NUNCA se toca una observación que ya haya sido regularizada
+        // manualmente por RR.HH. (solo aplica si sigue en estado PENDIENTE).
+        const obsId = key+'|'+iso+'|RRHH';
+        const obsPendiente = DB.observaciones.find(o=>o.id===obsId);
+        if(obsPendiente && obsPendiente.estado==='PENDIENTE' && obsPendiente.motivo==='SIN MARCACIÓN'){
+          obsPendiente.estado = 'RESUELTA_AUTOMATICA';
+          obsPendiente.justificacion = 'Resuelta automáticamente: se encontró una marcación en Talana al reprocesar';
+          obsPendiente.usuarioReg = 'SISTEMA';
+          obsPendiente.fechaHoraReg = todayIso();
+          resueltasAutomaticas++;
+        }
       } else {
         const esNueva = addObservacion('RRHH', key, trabajador.dniOriginal, trabajador.nombre, iso, resultado.motivo);
         if(esNueva) nuevasObsRRHH.push({dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:iso, motivo:resultado.motivo});
@@ -1612,7 +1640,7 @@ function procesarRango(fechaIniIso, fechaFinIso){
   saveDB();
   DB.historial.procesos.push({fecha: todayIso(), usuario:SESSION.user, rango:`${fechaIniIso} — ${fechaFinIso}`, correctos, obsRRHH, alertasAdmin, ignorados});
   saveDB();
-  return {dias, correctos, obsRRHH, alertasAdmin, ignorados, nuevasObsRRHH};
+  return {dias, correctos, obsRRHH, alertasAdmin, ignorados, resueltasAutomaticas, nuevasObsRRHH};
 }
 
 /* CASO 1 (ampliado): Francoplan=trabajo + Talana=sin marcación genera observación "SIN MARCACIÓN".
@@ -1666,7 +1694,7 @@ function procesarAlertasMarcacion(fechaIso){
     const clasif = clasificarCodigoFP(fcVal);
     if(clasif.tipo!=='TRABAJO') continue; // descanso, VA, FE, PSGH, DM, TL, C o desconocido: no aplica alerta preventiva
 
-    const marco = talanaMarco(key, fechaIso);
+    const marco = marcoParaAlerta(key, fechaIso);
     const amKey = key+'|'+fechaIso;
     const existente = DB.alertasMarcacion[amKey];
 
@@ -1817,15 +1845,18 @@ function handleMarcasFile(input){
         const dniOriginal = String(row[colDni]).trim();
         const key = dniKey(dniOriginal)+'|'+fecha;
         const hora = (colHora>=0 && excelTimeCellHasValue(row[colHora])) ? formatExcelTime(row[colHora]) : null;
-        if(DB.talana[key]){
-          if(!DB.talana[key].entrada){ DB.talana[key].entrada = hora || true; entradasActualizadas++; }
+        // IMPORTANTE: esto se guarda en DB.marcasManuales, NUNCA en DB.talana.
+        // DB.talana debe contener únicamente lo que venga de la carga/importación
+        // del reporte oficial de Talana (ver handleTalanaFile).
+        if(DB.marcasManuales[key]){
+          if(!DB.marcasManuales[key].entrada){ DB.marcasManuales[key].entrada = hora || true; entradasActualizadas++; }
         } else {
-          DB.talana[key] = {dniOriginal, fecha, entrada: hora || true, salida:null, nombre: colNombre>=0?row[colNombre]:null};
+          DB.marcasManuales[key] = {dniOriginal, fecha, entrada: hora || true, nombre: colNombre>=0?row[colNombre]:null};
           entradasNuevas++;
         }
       }
       saveDB();
-      DB.historial.cargas.push({tipo:'TALANA', fecha: todayIso(), usuario:SESSION.user, detalle:`${file.name} — listado de marcas: ${entradasNuevas+entradasActualizadas} entradas registradas, ${salidasIgnoradas} filas de salida ignoradas`});
+      DB.historial.cargas.push({tipo:'MARCAS_MANUAL', fecha: todayIso(), usuario:SESSION.user, detalle:`${file.name} — listado de marcas: ${entradasNuevas+entradasActualizadas} entradas registradas, ${salidasIgnoradas} filas de salida ignoradas`});
       saveDB();
       const fechaTexto = [...fechasVistas].sort().map(toDisplayDate).join(', ') || '—';
       msgEl.innerHTML = `<div class="msg-box ok">Listado de marcas procesado: ${entradasNuevas} entrada(s) nueva(s), ${entradasActualizadas} ya existían, ${salidasIgnoradas} fila(s) de salida ignoradas (fecha(s): ${fechaTexto}). Ya puedes presionar "Detectar alertas".</div>`;
@@ -2023,7 +2054,7 @@ async function handleProcesar(){
         }
       }
     }
-    msgEl.innerHTML = `<div class="msg-box ok">Procesado ${res.dias} día(s): ${res.correctos} correctos, ${res.obsRRHH} observaciones para RR.HH., ${res.alertasAdmin} alertas para Administración, ${res.ignorados} registros ignorados por vigencia.${syncMsg}</div>`;
+    msgEl.innerHTML = `<div class="msg-box ok">Procesado ${res.dias} día(s): ${res.correctos} correctos, ${res.obsRRHH} observaciones para RR.HH., ${res.alertasAdmin} alertas para Administración, ${res.ignorados} registros ignorados por vigencia${res.resueltasAutomaticas?`, ${res.resueltasAutomaticas} observación(es) resuelta(s) automáticamente por nueva marcación`:''}.${syncMsg}</div>`;
     refrescarTablaTareo();
   }catch(err){
     console.error(err);
@@ -2045,7 +2076,7 @@ function renderObservaciones(){
       <td><code class="mono">${escapeHtml(o.dni)}</code></td>
       <td>${escapeHtml(o.nombre)}</td>
       <td>${escapeHtml(o.motivo)}</td>
-      <td>${o.estado==='PENDIENTE' ? '<span class="badge warn">Pendiente</span>' : `<span class="badge ok">Regularizada — ${escapeHtml(o.justificacion||o.codigoReg)}${o.codigoReg==='OLVIDO_MARCAR' ? ' (marca '+escapeHtml(o.marcaResultante)+')' : ''}</span>`}</td>
+      <td>${o.estado==='PENDIENTE' ? '<span class="badge warn">Pendiente</span>' : o.estado==='RESUELTA_AUTOMATICA' ? '<span class="badge info">Resuelta automáticamente — nueva marcación en Talana</span>' : `<span class="badge ok">Regularizada — ${escapeHtml(o.justificacion||o.codigoReg)}${o.codigoReg==='OLVIDO_MARCAR' ? ' (marca '+escapeHtml(o.marcaResultante)+')' : ''}</span>`}</td>
       <td>${o.estado==='PENDIENTE' ? `<button class="btn small" onclick='openModalReg(${JSON.stringify(o.id)})'>Regularizar</button>` : `<span style="font-size:11.5px;color:var(--muted)">${escapeHtml(o.usuarioReg)} · ${new Date(o.fechaHoraReg).toLocaleString('es-PE')}</span>`}</td>
     </tr>`).join('');
 
@@ -2322,6 +2353,7 @@ function handleRestoreFile(input){
     showLoading('Restaurando copia de seguridad…');
     DB = nuevaDB;
     if(!DB.alertasMarcacion) DB.alertasMarcacion = {};
+    if(!DB.marcasManuales) DB.marcasManuales = {};
     if(!DB.historial) DB.historial = {cargas:[], procesos:[], txts:[]};
     saveDB();
     renderHistorial(); // reconstruye la pestaña con los datos restaurados
