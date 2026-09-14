@@ -1014,7 +1014,7 @@ function renderTablaPadronHtml(){
       <p style="font-size:12px;color:var(--muted)">El correo es necesario para las notificaciones del módulo "Alertas de marcación". Si tu archivo del padrón trae una columna de correo, se carga automáticamente; si algún trabajador no lo trae, puedes escribirlo aquí manualmente.</p>
       ${trabs.length===0 ? '<div class="empty">Aún no se ha cargado ningún padrón.</div>' : `
       <div class="table-wrap"><table>
-        <thead><tr><th>DNI</th><th>Nombre</th><th>Cargo</th><th>Régimen</th><th>Proyecto</th><th>Ítem</th><th>Ingreso</th><th>Cese</th><th>Estado</th><th>Vínculos</th><th>Correo</th></tr></thead>
+        <thead><tr><th>DNI</th><th>Nombre</th><th>Cargo</th><th>Régimen</th><th>Proyecto</th><th>Ítem</th><th>Centro de Costo</th><th>Ingreso</th><th>Cese</th><th>Estado</th><th>Vínculos</th><th>Correo</th></tr></thead>
         <tbody>
         ${trabs.map(t=>{
           const v = t.vinculos[t.vinculos.length-1];
@@ -1026,6 +1026,7 @@ function renderTablaPadronHtml(){
             <td>${escapeHtml(fmt(v.regimen))}</td>
             <td>${escapeHtml(fmt(v.proyecto))}</td>
             <td>${escapeHtml(fmt(v.item))}</td>
+            <td>${escapeHtml(fmt(v.centroCosto))}</td>
             <td>${v.ingreso?toDisplayDate(v.ingreso):'—'}</td>
             <td>${v.cese?toDisplayDate(v.cese):'<span class="badge ok">activo</span>'}</td>
             <td>${escapeHtml(fmt(v.estado))}</td>
@@ -1766,6 +1767,7 @@ function renderAlertasMarcacion(){
   const hoyIso = isoDate(new Date());
   const main = document.getElementById('main');
   main.innerHTML = `
+    <h2 class="page-title"><i class="ti ti-bell" aria-hidden="true" style="font-size:19px;vertical-align:-3px;margin-right:6px;color:var(--primary);"></i>Alertas de marcación</h2>
     <div class="panel" id="marcas-carga-panel">
       <div style="display:flex; gap:32px; flex-wrap:wrap;">
         <div style="flex:1 1 320px; min-width:280px;">
@@ -1949,28 +1951,32 @@ function renderTareo(){
     <h2 class="page-title">Procesar Tareo</h2>
     <p class="page-sub">Ejecuta el motor de validación sobre un rango de fechas usando el padrón, francoplan y talana ya cargados.</p>
     <div class="panel">
-      <h3>Procesar rango</h3>
-      <div class="row">
-        <div class="field"><label>Desde</label><input type="date" id="proc-ini"></div>
-        <div class="field"><label>Hasta</label><input type="date" id="proc-fin"></div>
-        <button class="btn" onclick="handleProcesar()">Procesar</button>
-      </div>
-      <div id="proc-msg" style="margin-top:12px;"></div>
-    </div>
-    <div class="panel">
-      <h3>Filtros</h3>
-      <div class="row">
-        <div class="field"><label>DNI</label><input id="ft-dni" oninput="applyTareoFilter()"></div>
-        <div class="field"><label>Trabajador</label><input id="ft-nombre" oninput="applyTareoFilter()"></div>
-        <div class="field"><label>Estado</label>
-          <select id="ft-estado" onchange="applyTareoFilter()">
-            <option value="">Todos</option>
-            <option value="CORRECTO">Correcto</option>
-            <option value="REGULARIZADO">Regularizado</option>
-            <option value="OBSERVACION_RRHH">Observación RR.HH.</option>
-            <option value="ALERTA_ADMIN">Alerta Administración</option>
-            <option value="IGNORADO">Ignorado (código C)</option>
-          </select>
+      <div style="display:flex; gap:32px; flex-wrap:wrap;">
+        <div style="flex:1 1 320px; min-width:280px;">
+          <h3>Procesar rango</h3>
+          <div class="row">
+            <div class="field"><label>Desde</label><input type="date" id="proc-ini"></div>
+            <div class="field"><label>Hasta</label><input type="date" id="proc-fin"></div>
+            <button class="btn" onclick="handleProcesar()">Procesar</button>
+          </div>
+          <div id="proc-msg" style="margin-top:12px;"></div>
+        </div>
+        <div style="flex:1 1 320px; min-width:280px; border-left:1px solid var(--line); padding-left:32px;">
+          <h3>Filtros</h3>
+          <div class="row">
+            <div class="field"><label>DNI</label><input id="ft-dni" oninput="applyTareoFilter()"></div>
+            <div class="field"><label>Trabajador</label><input id="ft-nombre" oninput="applyTareoFilter()"></div>
+            <div class="field"><label>Estado</label>
+              <select id="ft-estado" onchange="applyTareoFilter()">
+                <option value="">Todos</option>
+                <option value="CORRECTO">Correcto</option>
+                <option value="REGULARIZADO">Regularizado</option>
+                <option value="OBSERVACION_RRHH">Observación RR.HH.</option>
+                <option value="ALERTA_ADMIN">Alerta Administración</option>
+                <option value="IGNORADO">Ignorado (código C)</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
     </div>
