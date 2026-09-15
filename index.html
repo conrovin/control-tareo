@@ -247,6 +247,7 @@
   <div class="loading-card">
     <div class="spinner" aria-hidden="true"></div>
     <div class="loading-text" id="loading-text">Procesando…</div>
+    <button type="button" onclick="hideLoading()" style="background:none;border:none;color:var(--muted);font-size:11.5px;cursor:pointer;text-decoration:underline;padding:0;">Cerrar (si se quedó pegado)</button>
   </div>
 </div>
 
@@ -611,6 +612,10 @@ async function loginMicrosoft(){
 
     const role=await cargarRolesDesdeSharePoint();
     SESSION={user:role.email,rol:role.rol};
+    if(Object.keys(DB.trabajadores).length===0){
+      msg.innerHTML='<div class="msg-box loading"><i class="ti ti-loader-2" aria-hidden="true"></i> Primer ingreso en este navegador: trayendo la información ya cargada desde SharePoint…</div>';
+      await sincronizarDesdeSharePoint();
+    }
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').style.display='grid';
     document.getElementById('who-user').textContent=role.email;
@@ -636,6 +641,9 @@ async function restaurarSesionM365(){
 
     const role=await cargarRolesDesdeSharePoint();
     SESSION={user:role.email,rol:role.rol};
+    if(Object.keys(DB.trabajadores).length===0){
+      await sincronizarDesdeSharePoint();
+    }
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').style.display='grid';
     document.getElementById('who-user').textContent=role.email;
@@ -646,23 +654,127 @@ async function restaurarSesionM365(){
     console.warn('No se pudo restaurar la sesión Microsoft 365 automáticamente:',e);
   }
 }
-async function cargarDatosSharePoint(){
-  if(!M365.clientId || !M365.siteUrl) return false;
+async function sincronizarDesdeSharePoint(){
+  if(!M365.siteUrl || !graphToken) return {ok:false, error:'No hay sesión de Microsoft 365 activa.'};
   try{
-    await obtenerTokenGraph();
-    const maps=await Promise.all([
+    const [trabRows, vincRows, talanaRows, fpRows, obsRows, alertRows] = await Promise.all([
       graphListItems('Trabajadores','Title,Nombre,CodigoHapiqa,Correo'),
-      graphListItems('Vinculos','Title,FechaIngreso,FechaCese,Cargo,RegimenLaboral,Proyecto,Item,Estado'),
-      graphListItems('Talana','Title,Fecha,Entrada,Salida,Origen'),
+      graphListItems('Vinculos','Title,FechaIngreso,FechaCese,Cargo,RegimenLaboral,Proyecto,Item,Estado,CentroCosto'),
+      graphListItems('Talana','Title,Fecha,Entrada,Salida'),
       graphListItems('Francoplan','Title,Fecha,Codigo,MesVersion,Revision,FechaCarga'),
-      graphListItems('Tareo','Title,Fecha,CodigoFrancoplan,MarcoTalana,Estado,Marca,Motivo,Proyecto,Item'),
       graphListItems('Observaciones','Title,Fecha,Tipo,Motivo,Estado'),
-      graphListItems('AlertasMarcacion','Title,Fecha,Estado,Canal')
+      graphListItems('AlertasMarcacion','Title,Fecha,Estado,Canal,FechaHoraNotificacion,FechaHoraResolucion,ObservacionVinculada'),
     ]);
-    DB._sharepoint={trabajadores:maps[0],vinculos:maps[1],talana:maps[2],francoplan:maps[3],tareo:maps[4],observaciones:maps[5],alertas:maps[6],loadedAt:todayIso()};
+
+    // --- Trabajadores + Vinculos (se reconstruye la estructura anidada que usa la app) ---
+    const nuevoTrabajadores = {};
+    trabRows.forEach(x=>{
+      const f=x.fields||{};
+      const dni=String(f.Title||'').trim();
+      if(!dni) return;
+      nuevoTrabajadores[dniKey(dni)] = {dniOriginal:dni, nombre:f.Nombre||'', correo:f.Correo||null, vinculos:[]};
+    });
+    vincRows.forEach(x=>{
+      const f=x.fields||{};
+      const dni=String(f.Title||'').trim();
+      if(!dni) return;
+      const key=dniKey(dni);
+      if(!nuevoTrabajadores[key]) nuevoTrabajadores[key] = {dniOriginal:dni, nombre:'', correo:null, vinculos:[]};
+      nuevoTrabajadores[key].vinculos.push({
+        ingreso: f.FechaIngreso ? String(f.FechaIngreso).split('T')[0] : null,
+        cese: f.FechaCese ? String(f.FechaCese).split('T')[0] : null,
+        cargo: f.Cargo||'', regimen: f.RegimenLaboral||'', estado: f.Estado||'',
+        proyecto: f.Proyecto||'', item: f.Item||'', codigo: null, centroCosto: f.CentroCosto||''
+      });
+    });
+    Object.values(nuevoTrabajadores).forEach(t=>{
+      t.vinculos.sort((a,b)=> String(a.ingreso||'').localeCompare(String(b.ingreso||'')));
+      if(!t.vinculos.length) t.vinculos.push({ingreso:null,cese:null,cargo:'',regimen:'',estado:'',proyecto:'',item:'',codigo:null,centroCosto:''});
+    });
+
+    // --- Talana (solo lo que venga realmente de la lista Talana) ---
+    const nuevoTalana = {};
+    talanaRows.forEach(x=>{
+      const f=x.fields||{};
+      const dni=String(f.Title||'').trim();
+      const fecha = f.Fecha ? String(f.Fecha).split('T')[0] : null;
+      if(!dni||!fecha) return;
+      nuevoTalana[dniKey(dni)+'|'+fecha] = {dniOriginal:dni, fecha, entrada:f.Entrada||null, salida:f.Salida||null, nombre:(nuevoTrabajadores[dniKey(dni)]||{}).nombre||null};
+    });
+
+    // --- Francoplan (reconstrucción por mes/versión a partir de las filas planas) ---
+    const versionesTmp = {};
+    fpRows.forEach(x=>{
+      const f=x.fields||{};
+      const dni=String(f.Title||'').trim();
+      const fecha = f.Fecha ? String(f.Fecha).split('T')[0] : null;
+      if(!dni||!fecha) return;
+      const mesKey = fecha.slice(0,7);
+      const rev = f.Revision || 'v1';
+      const fechaCarga = f.FechaCarga || fecha;
+      const vKey = mesKey+'|'+rev+'|'+fechaCarga;
+      if(!versionesTmp[vKey]) versionesTmp[vKey] = {mesKey, rev, filename:'(recuperado de SharePoint)', fechaCarga, data:{}};
+      const key = dniKey(dni);
+      if(!versionesTmp[vKey].data[key]) versionesTmp[vKey].data[key] = {};
+      versionesTmp[vKey].data[key][fecha] = f.Codigo;
+    });
+    const nuevoFrancoplan = {};
+    Object.values(versionesTmp).forEach(v=>{
+      if(!nuevoFrancoplan[v.mesKey]) nuevoFrancoplan[v.mesKey] = {mesLabel:v.mesKey, versions:[]};
+      nuevoFrancoplan[v.mesKey].versions.push({rev:v.rev, filename:v.filename, fechaCarga:v.fechaCarga, data:v.data});
+    });
+    Object.values(nuevoFrancoplan).forEach(fp=> fp.versions.sort((a,b)=> String(a.fechaCarga||'').localeCompare(String(b.fechaCarga||''))));
+
+    // --- Observaciones ---
+    const nuevoObservaciones = obsRows.map(x=>{
+      const f=x.fields||{};
+      const dni=String(f.Title||'').trim();
+      const fecha=f.Fecha?String(f.Fecha).split('T')[0]:null;
+      const tipo=f.Tipo||'RRHH';
+      const estadoSP=f.Estado||'Pendiente';
+      const estado = estadoSP==='Regularizada'?'REGULARIZADA':estadoSP==='Informativa'?'INFORMATIVA':'PENDIENTE';
+      return {id:dniKey(dni)+'|'+fecha+'|'+tipo, dniKey:dniKey(dni), dni, nombre:(nuevoTrabajadores[dniKey(dni)]||{}).nombre||'', fecha, tipo, motivo:f.Motivo||'', estado, codigoReg:null, usuarioReg:null, fechaHoraReg:null};
+    }).filter(o=>o.dni && o.fecha);
+
+    // --- Alertas de marcación ---
+    const nuevoAlertas = {};
+    alertRows.forEach(x=>{
+      const f=x.fields||{};
+      const dni=String(f.Title||'').trim();
+      const fecha=f.Fecha?String(f.Fecha).split('T')[0]:null;
+      if(!dni||!fecha) return;
+      const key=dniKey(dni);
+      const estadoSP=f.Estado||'Pendiente';
+      const estado = estadoSP==='Resuelta'?'RESUELTA':estadoSP==='Escalada'?'ESCALADA':'PENDIENTE';
+      nuevoAlertas[key+'|'+fecha] = {
+        dniKey:key, dni, nombre:(nuevoTrabajadores[key]||{}).nombre||'', fecha, estado,
+        canal:f.Canal||'CORREO', correo:(nuevoTrabajadores[key]||{}).correo||null,
+        notificado: estado!=='PENDIENTE', fechaHoraNotificacion:f.FechaHoraNotificacion||null,
+        fechaHoraResolucion:f.FechaHoraResolucion||null, observacionVinculada: !!f.ObservacionVinculada
+      };
+    });
+
+    // Nota: la lista "Tareo" en SharePoint no se sincroniza (nunca se le escribe), así que el
+    // detalle día a día no se puede traer de vuelta — hay que presionar "Procesar" una vez
+    // descargado lo demás para regenerarlo localmente.
+    DB.trabajadores = nuevoTrabajadores;
+    DB.talana = nuevoTalana;
+    DB.francoplan = nuevoFrancoplan;
+    DB.observaciones = nuevoObservaciones;
+    DB.alertasMarcacion = nuevoAlertas;
     saveDB();
-    return true;
-  }catch(e){ console.warn('SharePoint no disponible:',e); return false; }
+    return {
+      ok:true,
+      trabajadores: Object.keys(nuevoTrabajadores).length,
+      talana: Object.keys(nuevoTalana).length,
+      francoplan: Object.keys(nuevoFrancoplan).length,
+      observaciones: nuevoObservaciones.length,
+      alertas: Object.keys(nuevoAlertas).length
+    };
+  }catch(e){
+    console.error('No se pudo sincronizar desde SharePoint:', e);
+    return {ok:false, error: e.message||String(e)};
+  }
 }
 window.addEventListener('load',()=>{ setTimeout(restaurarSesionM365,50); });
 
@@ -755,13 +867,22 @@ function escapeHtml(s){ return (s===undefined||s===null)?'':String(s).replace(/[
 /* ==========================================================
    OVERLAY DE CARGA — feedback visual mientras se procesa un archivo
    ========================================================== */
+let loadingTimeoutId = null;
 function showLoading(texto){
   const ov = document.getElementById('loading-overlay');
   const txt = document.getElementById('loading-text');
   if(txt) txt.textContent = texto || 'Procesando…';
   if(ov) ov.classList.add('show');
+  // Salvedad de seguridad: si por cualquier motivo no controlado nunca se llama a
+  // hideLoading(), esto evita que el aviso quede pegado para siempre en pantalla.
+  clearTimeout(loadingTimeoutId);
+  loadingTimeoutId = setTimeout(()=>{
+    console.warn('El aviso de carga se cerró automáticamente por seguridad (45s sin completarse).');
+    hideLoading();
+  }, 45000);
 }
 function hideLoading(){
+  clearTimeout(loadingTimeoutId);
   const ov = document.getElementById('loading-overlay');
   if(ov) ov.classList.remove('show');
 }
@@ -842,8 +963,6 @@ const TAB_ICONS = {
   exportaciones:'ti-chart-bar'
 };
 let currentTab = null;
-let obsSubTab = 'RRHH';
-let obsFiltro = '';
 function buildNav(){
   const tabs = SESSION.rol==='RRHH' ? TABS_RRHH : TABS_ADMIN;
   const el = document.getElementById('tabs');
@@ -925,6 +1044,21 @@ function renderExportaciones(){
 /* ==========================================================
    DASHBOARD
    ========================================================== */
+async function handleSincronizarDesdeSharePoint(){
+  const msgEl = document.getElementById('dash-sync-msg');
+  if(!M365.siteUrl || !graphToken){
+    msgEl.innerHTML = `<div class="msg-box err">No hay sesión de Microsoft 365 activa.</div>`;
+    return;
+  }
+  msgEl.innerHTML = `<div class="msg-box loading"><i class="ti ti-loader-2" aria-hidden="true"></i> Trayendo información desde SharePoint, puede tardar unos segundos…</div>`;
+  const r = await sincronizarDesdeSharePoint();
+  if(!r.ok){
+    msgEl.innerHTML = `<div class="msg-box err">No se pudo sincronizar: ${escapeHtml(r.error||'error desconocido')}</div>`;
+    return;
+  }
+  msgEl.innerHTML = `<div class="msg-box ok">Listo: ${r.trabajadores} trabajador(es), ${r.talana} registro(s) de Talana, ${r.francoplan} mes(es) de Francoplan, ${r.observaciones} observación(es) y ${r.alertas} alerta(s) de marcación. Si necesitas el detalle día a día del Tareo, presiona "Procesar" en esa pestaña una vez.</div>`;
+  renderDashboard();
+}
 function renderDashboard(){
   const nTrab = Object.values(DB.trabajadores).filter(t=>vinculoVigenteHoy(t)).length;
   const ultTalana = DB.historial.cargas.filter(c=>c.tipo==='TALANA').slice(-1)[0];
@@ -952,6 +1086,12 @@ function renderDashboard(){
       <div class="card warn"><div class="num">${pendientes}</div><div class="lbl">Observaciones pendientes (RR.HH.)</div></div>
       <div class="card alert"><div class="num">${alertas}</div><div class="lbl">Alertas para Administración</div></div>
       <div class="card"><div class="num">${ultTxt ? toDisplayDate(ultTxt.fecha.split('T')[0]) : '—'}</div><div class="lbl">Último TXT generado</div></div>
+    </div>
+    <div class="panel">
+      <h3><i class="ti ti-refresh" aria-hidden="true" style="font-size:16px;vertical-align:-2px;margin-right:6px;color:var(--primary);"></i>Sincronizar con SharePoint</h3>
+      <p style="font-size:12.8px;color:var(--muted)">Si en este navegador no ves el padrón u otra información que ya se cargó desde otra computadora, usa este botón para traerla desde SharePoint.</p>
+      <button class="btn secondary" onclick="handleSincronizarDesdeSharePoint()">Traer datos desde SharePoint</button>
+      <div id="dash-sync-msg" style="margin-top:10px;"></div>
     </div>
     <div class="panel">
       <h3><i class="ti ti-bell" aria-hidden="true" style="font-size:16px;vertical-align:-2px;margin-right:6px;color:var(--warn);"></i>Alertas de marcación — hoy (${toDisplayDate(hoyIso)})</h3>
@@ -1014,7 +1154,7 @@ function renderTablaPadronHtml(){
       <p style="font-size:12px;color:var(--muted)">El correo es necesario para las notificaciones del módulo "Alertas de marcación". Si tu archivo del padrón trae una columna de correo, se carga automáticamente; si algún trabajador no lo trae, puedes escribirlo aquí manualmente.</p>
       ${trabs.length===0 ? '<div class="empty">Aún no se ha cargado ningún padrón.</div>' : `
       <div class="table-wrap"><table>
-        <thead><tr><th>DNI</th><th>Nombre</th><th>Cargo</th><th>Régimen</th><th>Proyecto</th><th>Ítem</th><th>Centro de Costo</th><th>Ingreso</th><th>Cese</th><th>Estado</th><th>Vínculos</th><th>Correo</th></tr></thead>
+        <thead><tr><th>DNI</th><th>Nombre</th><th>Cargo</th><th>Régimen</th><th>Proyecto</th><th>Ítem</th><th>Ingreso</th><th>Cese</th><th>Estado</th><th>Vínculos</th><th>Correo</th></tr></thead>
         <tbody>
         ${trabs.map(t=>{
           const v = t.vinculos[t.vinculos.length-1];
@@ -1026,7 +1166,6 @@ function renderTablaPadronHtml(){
             <td>${escapeHtml(fmt(v.regimen))}</td>
             <td>${escapeHtml(fmt(v.proyecto))}</td>
             <td>${escapeHtml(fmt(v.item))}</td>
-            <td>${escapeHtml(fmt(v.centroCosto))}</td>
             <td>${v.ingreso?toDisplayDate(v.ingreso):'—'}</td>
             <td>${v.cese?toDisplayDate(v.cese):'<span class="badge ok">activo</span>'}</td>
             <td>${escapeHtml(fmt(v.estado))}</td>
@@ -1768,24 +1907,21 @@ function renderAlertasMarcacion(){
   const main = document.getElementById('main');
   main.innerHTML = `
     <h2 class="page-title"><i class="ti ti-bell" aria-hidden="true" style="font-size:19px;vertical-align:-3px;margin-right:6px;color:var(--primary);"></i>Alertas de marcación</h2>
+    <p class="page-sub">Control preventivo durante el día: avisa a quien debía trabajar y aún no registra marcación en Talana. No reemplaza ni duplica la observación definitiva de RR.HH. — esta se genera solo cuando se ejecuta el procesamiento del tareo (pestaña "Tareo").</p>
     <div class="panel" id="marcas-carga-panel">
-      <div style="display:flex; gap:32px; flex-wrap:wrap;">
-        <div style="flex:1 1 320px; min-width:280px;">
-          <h3>1. Cargar reporte de marcas del mediodía</h3>
-          <p style="font-size:12px;color:var(--muted); margin-top:-4px;">Este es el "listado de marcas" (una fila por marcación, con Entrada/Salida) — distinto del reporte que usas en la pestaña "Talana". Solo se toman en cuenta las filas marcadas como <b>Entrada</b>; las de Salida se ignoran para esta detección preventiva.</p>
-          <input type="file" id="file-marcas" accept=".xlsx,.xls" onchange="handleMarcasFile(this)">
-          <div id="marcas-msg" style="margin-top:12px;"></div>
-        </div>
-        <div style="flex:1 1 320px; min-width:280px; border-left:1px solid var(--line); padding-left:32px;">
-          <h3>2. Detectar alertas</h3>
-          <div class="row">
-            <div class="field"><label>Fecha a revisar</label><input type="date" id="am-fecha" value="${hoyIso}"></div>
-            <button class="btn" onclick="handleProcesarAlertas()">Detectar alertas</button>
-          </div>
-          <p style="font-size:11.8px;color:var(--muted); margin-top:8px;">Puedes repetir esto varias veces al día, cargando de nuevo el reporte de marcas cada vez: no se reenvían alertas ya notificadas, y las que ya tienen marcación pasan automáticamente a "Resuelta". (También puedes usar aquí un Talana ya cargado desde la pestaña "Talana", si lo prefieres.)</p>
-          <div id="am-msg" style="margin-top:12px;"></div>
-        </div>
+      <h3>1. Cargar reporte de marcas del mediodía</h3>
+      <p style="font-size:12px;color:var(--muted); margin-top:-4px;">Este es el "listado de marcas" (una fila por marcación, con Entrada/Salida) — distinto del reporte que usas en la pestaña "Talana". Solo se toman en cuenta las filas marcadas como <b>Entrada</b>; las de Salida se ignoran para esta detección preventiva.</p>
+      <input type="file" id="file-marcas" accept=".xlsx,.xls" onchange="handleMarcasFile(this)">
+      <div id="marcas-msg" style="margin-top:12px;"></div>
+    </div>
+    <div class="panel">
+      <h3>2. Detectar alertas</h3>
+      <div class="row">
+        <div class="field"><label>Fecha a revisar</label><input type="date" id="am-fecha" value="${hoyIso}"></div>
+        <button class="btn" onclick="handleProcesarAlertas()">Detectar alertas</button>
       </div>
+      <p style="font-size:11.8px;color:var(--muted); margin-top:8px;">Puedes repetir esto varias veces al día, cargando de nuevo el reporte de marcas cada vez: no se reenvían alertas ya notificadas, y las que ya tienen marcación pasan automáticamente a "Resuelta". (También puedes usar aquí un Talana ya cargado desde la pestaña "Talana", si lo prefieres.)</p>
+      <div id="am-msg" style="margin-top:12px;"></div>
     </div>
     <div class="panel" id="am-tabla-panel">
       ${renderTablaAlertas()}
@@ -1951,32 +2087,28 @@ function renderTareo(){
     <h2 class="page-title">Procesar Tareo</h2>
     <p class="page-sub">Ejecuta el motor de validación sobre un rango de fechas usando el padrón, francoplan y talana ya cargados.</p>
     <div class="panel">
-      <div style="display:flex; gap:32px; flex-wrap:wrap;">
-        <div style="flex:1 1 320px; min-width:280px;">
-          <h3>Procesar rango</h3>
-          <div class="row">
-            <div class="field"><label>Desde</label><input type="date" id="proc-ini"></div>
-            <div class="field"><label>Hasta</label><input type="date" id="proc-fin"></div>
-            <button class="btn" onclick="handleProcesar()">Procesar</button>
-          </div>
-          <div id="proc-msg" style="margin-top:12px;"></div>
-        </div>
-        <div style="flex:1 1 320px; min-width:280px; border-left:1px solid var(--line); padding-left:32px;">
-          <h3>Filtros</h3>
-          <div class="row">
-            <div class="field"><label>DNI</label><input id="ft-dni" oninput="applyTareoFilter()"></div>
-            <div class="field"><label>Trabajador</label><input id="ft-nombre" oninput="applyTareoFilter()"></div>
-            <div class="field"><label>Estado</label>
-              <select id="ft-estado" onchange="applyTareoFilter()">
-                <option value="">Todos</option>
-                <option value="CORRECTO">Correcto</option>
-                <option value="REGULARIZADO">Regularizado</option>
-                <option value="OBSERVACION_RRHH">Observación RR.HH.</option>
-                <option value="ALERTA_ADMIN">Alerta Administración</option>
-                <option value="IGNORADO">Ignorado (código C)</option>
-              </select>
-            </div>
-          </div>
+      <h3>Procesar rango</h3>
+      <div class="row">
+        <div class="field"><label>Desde</label><input type="date" id="proc-ini"></div>
+        <div class="field"><label>Hasta</label><input type="date" id="proc-fin"></div>
+        <button class="btn" onclick="handleProcesar()">Procesar</button>
+      </div>
+      <div id="proc-msg" style="margin-top:12px;"></div>
+    </div>
+    <div class="panel">
+      <h3>Filtros</h3>
+      <div class="row">
+        <div class="field"><label>DNI</label><input id="ft-dni" oninput="applyTareoFilter()"></div>
+        <div class="field"><label>Trabajador</label><input id="ft-nombre" oninput="applyTareoFilter()"></div>
+        <div class="field"><label>Estado</label>
+          <select id="ft-estado" onchange="applyTareoFilter()">
+            <option value="">Todos</option>
+            <option value="CORRECTO">Correcto</option>
+            <option value="REGULARIZADO">Regularizado</option>
+            <option value="OBSERVACION_RRHH">Observación RR.HH.</option>
+            <option value="ALERTA_ADMIN">Alerta Administración</option>
+            <option value="IGNORADO">Ignorado (código C)</option>
+          </select>
         </div>
       </div>
     </div>
@@ -2076,89 +2208,43 @@ async function handleProcesar(){
    OBSERVACIONES
    ========================================================== */
 function renderObservaciones(){
-  if(SESSION.rol==='RRHH') obsSubTab = 'RRHH'; // RR.HH. no ve Administración
+  const rrhh = DB.observaciones.filter(o=>o.tipo==='RRHH').sort((a,b)=> a.fecha<b.fecha?1:-1);
+  const admin = DB.observaciones.filter(o=>o.tipo==='ADMIN').sort((a,b)=> a.fecha<b.fecha?1:-1);
   const main = document.getElementById('main');
+
+  const rrhhRows = rrhh.map(o=>`
+    <tr>
+      <td>${toDisplayDate(o.fecha)}</td>
+      <td><code class="mono">${escapeHtml(o.dni)}</code></td>
+      <td>${escapeHtml(o.nombre)}</td>
+      <td>${escapeHtml(o.motivo)}</td>
+      <td>${o.estado==='PENDIENTE' ? '<span class="badge warn">Pendiente</span>' : o.estado==='RESUELTA_AUTOMATICA' ? '<span class="badge info">Resuelta automáticamente — nueva marcación en Talana</span>' : `<span class="badge ok">Regularizada — ${escapeHtml(o.justificacion||o.codigoReg)}${o.codigoReg==='OLVIDO_MARCAR' ? ' (marca '+escapeHtml(o.marcaResultante)+')' : ''}</span>`}</td>
+      <td>${o.estado==='PENDIENTE' ? `<button class="btn small" onclick='openModalReg(${JSON.stringify(o.id)})'>Regularizar</button>` : `<span style="font-size:11.5px;color:var(--muted)">${escapeHtml(o.usuarioReg)} · ${new Date(o.fechaHoraReg).toLocaleString('es-PE')}</span>`}</td>
+    </tr>`).join('');
 
   main.innerHTML = `
     <h2 class="page-title">Observaciones</h2>
     <p class="page-sub">${SESSION.rol==='RRHH' ? 'Revise y regularice las observaciones pendientes. No se administran archivos desde aquí.' : 'Observaciones para RR.HH. y alertas para Administración.'}</p>
 
-    <div class="tabs-secondary" style="display:flex; gap:8px; margin-bottom:14px;">
-      <button class="btn ${obsSubTab==='RRHH'?'':'secondary'}" onclick="goObsSubTab('RRHH')">Observaciones RR.HH.</button>
-      ${SESSION.rol!=='RRHH' ? `<button class="btn ${obsSubTab==='ADMIN'?'':'secondary'}" onclick="goObsSubTab('ADMIN')">Alertas Administración</button>` : ''}
-    </div>
-
     <div class="panel">
-      <div class="row" style="align-items:flex-end;">
-        <div class="field">
-          <label>Estado</label>
-          <select id="obs-filtro" onchange="applyObsFilter()">
-            <option value="" ${obsFiltro===''?'selected':''}>Todas</option>
-            <option value="PENDIENTE" ${obsFiltro==='PENDIENTE'?'selected':''}>Pendientes</option>
-            <option value="RESUELTA" ${obsFiltro==='RESUELTA'?'selected':''}>Regularizadas</option>
-          </select>
-        </div>
-      </div>
-      <h3 id="obs-titulo" style="margin-top:16px;"></h3>
-      <div class="table-wrap"><table id="obs-table">
-        <thead id="obs-thead"></thead>
-        <tbody id="obs-tbody"></tbody>
+      <h3>Observaciones para RR.HH. (${rrhh.filter(o=>o.estado==='PENDIENTE').length} pendientes de ${rrhh.length})</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Situación</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${rrhh.length? rrhhRows : `<tr><td colspan="6" class="empty">No hay observaciones para RR.HH.</td></tr>`}</tbody>
       </table></div>
     </div>
+
+    ${SESSION.rol!=='RRHH' ? `
+    <div class="panel">
+      <h3>Alertas para Administración (${admin.length})</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Motivo</th></tr></thead>
+        <tbody>${admin.length? admin.map(o=>`
+          <tr><td>${toDisplayDate(o.fecha)}</td><td><code class="mono">${escapeHtml(o.dni)}</code></td><td>${escapeHtml(o.nombre)}</td><td>${escapeHtml(o.motivo)}</td></tr>
+        `).join('') : `<tr><td colspan="4" class="empty">No hay alertas para Administración.</td></tr>`}</tbody>
+      </table></div>
+    </div>` : ''}
   `;
-  applyObsFilter();
-}
-
-function goObsSubTab(tab){
-  obsSubTab = tab;
-  obsFiltro = '';
-  renderObservaciones();
-}
-
-function obsRrhhRow(o){
-  return `<tr>
-    <td>${toDisplayDate(o.fecha)}</td>
-    <td><code class="mono">${escapeHtml(o.dni)}</code></td>
-    <td>${escapeHtml(o.nombre)}</td>
-    <td>${escapeHtml(o.motivo)}</td>
-    <td>${o.estado==='PENDIENTE' ? '<span class="badge warn">Pendiente</span>' : o.estado==='RESUELTA_AUTOMATICA' ? '<span class="badge info">Resuelta automáticamente — nueva marcación en Talana</span>' : `<span class="badge ok">Regularizada — ${escapeHtml(o.justificacion||o.codigoReg)}${o.codigoReg==='OLVIDO_MARCAR' ? ' (marca '+escapeHtml(o.marcaResultante)+')' : ''}</span>`}</td>
-    <td>${o.estado==='PENDIENTE' ? `<button class="btn small" onclick='openModalReg(${JSON.stringify(o.id)})'>Regularizar</button>` : `<span style="font-size:11.5px;color:var(--muted)">${escapeHtml(o.usuarioReg)} · ${new Date(o.fechaHoraReg).toLocaleString('es-PE')}</span>`}</td>
-  </tr>`;
-}
-
-function obsAdminRow(o){
-  return `<tr>
-    <td>${toDisplayDate(o.fecha)}</td>
-    <td><code class="mono">${escapeHtml(o.dni)}</code></td>
-    <td>${escapeHtml(o.nombre)}</td>
-    <td>${escapeHtml(o.motivo)}</td>
-    <td>${o.estado==='INFORMATIVA' || !o.estado ? '<span class="badge warn">Pendiente</span>' : `<span class="badge ok">Resuelta</span>`}</td>
-  </tr>`;
-}
-
-function applyObsFilter(){
-  obsFiltro = document.getElementById('obs-filtro') ? document.getElementById('obs-filtro').value : obsFiltro;
-  const thead = document.getElementById('obs-thead');
-  const tbody = document.getElementById('obs-tbody');
-  const titulo = document.getElementById('obs-titulo');
-
-  if(obsSubTab==='RRHH'){
-    let rrhh = DB.observaciones.filter(o=>o.tipo==='RRHH').sort((a,b)=> a.fecha<b.fecha?1:-1);
-    if(obsFiltro==='PENDIENTE') rrhh = rrhh.filter(o=>o.estado==='PENDIENTE');
-    if(obsFiltro==='RESUELTA') rrhh = rrhh.filter(o=>o.estado==='REGULARIZADA' || o.estado==='RESUELTA_AUTOMATICA');
-    const total = DB.observaciones.filter(o=>o.tipo==='RRHH');
-    titulo.textContent = `Observaciones para RR.HH. (${total.filter(o=>o.estado==='PENDIENTE').length} pendientes de ${total.length})`;
-    thead.innerHTML = `<tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Situación</th><th>Estado</th><th></th></tr>`;
-    tbody.innerHTML = rrhh.length? rrhh.map(obsRrhhRow).join('') : `<tr><td colspan="6" class="empty">No hay observaciones para RR.HH. con este filtro.</td></tr>`;
-  } else {
-    let admin = DB.observaciones.filter(o=>o.tipo==='ADMIN').sort((a,b)=> a.fecha<b.fecha?1:-1);
-    if(obsFiltro==='PENDIENTE') admin = admin.filter(o=>o.estado==='INFORMATIVA' || !o.estado);
-    if(obsFiltro==='RESUELTA') admin = admin.filter(o=>o.estado && o.estado!=='INFORMATIVA');
-    const total = DB.observaciones.filter(o=>o.tipo==='ADMIN');
-    titulo.textContent = `Alertas para Administración (${total.filter(o=>o.estado==='INFORMATIVA' || !o.estado).length} pendientes de ${total.length})`;
-    thead.innerHTML = `<tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Motivo</th><th>Estado</th></tr>`;
-    tbody.innerHTML = admin.length? admin.map(obsAdminRow).join('') : `<tr><td colspan="5" class="empty">No hay alertas para Administración con este filtro.</td></tr>`;
-  }
 }
 
 // Códigos de justificación estándar (siempre disponibles)
