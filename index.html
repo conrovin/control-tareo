@@ -133,6 +133,20 @@
   .field{display:flex; flex-direction:column; gap:5px;}
   .field label{font-size:12px; color:var(--muted); font-weight:600;}
   .field input, .field select{padding:8px 10px; border:1.5px solid var(--line); border-radius:var(--radius-sm); font-size:13.5px; font-family:var(--sans);}
+  select{
+    -webkit-appearance:none; -moz-appearance:none; appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23767C8C'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 10px center; background-size:16px;
+    padding-right:32px !important; cursor:pointer;
+  }
+  select:hover, select:focus{ border-color:var(--primary); outline:none; }
+  .split-panel{display:flex; gap:24px; align-items:stretch;}
+  .split-panel .split-col{flex:1; min-width:0;}
+  .split-panel .split-divider{width:1px; background:var(--line); flex-shrink:0;}
+  @media (max-width:760px){
+    .split-panel{flex-direction:column;}
+    .split-panel .split-divider{width:100%; height:1px;}
+  }
   .field input[type="date"]{
     color-scheme: light; height:38px; padding-right:8px; cursor:pointer;
     transition:border-color .15s ease;
@@ -427,17 +441,18 @@ async function sincronizarAlertasSharePoint(){
   return {creadas,actualizadas};
 }
 async function sincronizarObservacionesSharePoint(){
-  if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0};
+  if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0,idsCreadas:[]};
   let creadas=0, actualizadas=0;
+  const idsCreadas=[]; // ids que resultaron NUEVOS en SharePoint (no solo nuevos en este navegador)
   for(const o of DB.observaciones||[]){
     try{
       const existing=await graphFindListItem('Observaciones',{Title:o.dni,Fecha:o.fecha,Tipo:o.tipo});
       const fields={Title:o.dni,Fecha:o.fecha,Tipo:o.tipo,Motivo:o.motivo,Estado:(o.estado==='REGULARIZADA'||o.estado==='RESUELTA_AUTOMATICA')?'Regularizada':o.estado==='INFORMATIVA'?'Informativa':'Pendiente'};
       if(existing){ await graphUpdateListItem('Observaciones',existing.id,fields); actualizadas++; }
-      else { await graphCreateListItem('Observaciones',fields); creadas++; }
+      else { await graphCreateListItem('Observaciones',fields); creadas++; idsCreadas.push(o.id); }
     }catch(e){ console.warn('No se pudo sincronizar observación con SharePoint:',o,e); }
   }
-  return {creadas,actualizadas};
+  return {creadas,actualizadas,idsCreadas};
 }
 async function sincronizarTrabajadoresSharePoint(){
   if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0};
@@ -1157,7 +1172,7 @@ function renderTablaPadronHtml(){
       <p style="font-size:12px;color:var(--muted)">El correo es necesario para las notificaciones del módulo "Alertas de marcación". Si tu archivo del padrón trae una columna de correo, se carga automáticamente; si algún trabajador no lo trae, puedes escribirlo aquí manualmente.</p>
       ${trabs.length===0 ? '<div class="empty">Aún no se ha cargado ningún padrón.</div>' : `
       <div class="table-wrap"><table>
-        <thead><tr><th>DNI</th><th>Nombre</th><th>Cargo</th><th>Régimen</th><th>Proyecto</th><th>Ítem</th><th>Ingreso</th><th>Cese</th><th>Estado</th><th>Vínculos</th><th>Correo</th></tr></thead>
+        <thead><tr><th>DNI</th><th>Nombre</th><th>Cargo</th><th>Régimen</th><th>Proyecto</th><th>Ítem</th><th>Centro de Costo</th><th>Ingreso</th><th>Cese</th><th>Estado</th><th>Vínculos</th><th>Correo</th></tr></thead>
         <tbody>
         ${trabs.map(t=>{
           const v = t.vinculos[t.vinculos.length-1];
@@ -1169,6 +1184,7 @@ function renderTablaPadronHtml(){
             <td>${escapeHtml(fmt(v.regimen))}</td>
             <td>${escapeHtml(fmt(v.proyecto))}</td>
             <td>${escapeHtml(fmt(v.item))}</td>
+            <td>${escapeHtml(fmt(v.centroCosto))}</td>
             <td>${v.ingreso?toDisplayDate(v.ingreso):'—'}</td>
             <td>${v.cese?toDisplayDate(v.cese):'<span class="badge ok">activo</span>'}</td>
             <td>${escapeHtml(fmt(v.estado))}</td>
@@ -1772,7 +1788,7 @@ function procesarRango(fechaIniIso, fechaFinIso){
         }
       } else {
         const esNueva = addObservacion('RRHH', key, trabajador.dniOriginal, trabajador.nombre, iso, resultado.motivo);
-        if(esNueva) nuevasObsRRHH.push({dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:iso, motivo:resultado.motivo});
+        if(esNueva) nuevasObsRRHH.push({id: key+'|'+iso+'|RRHH', dniKey:key, dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:iso, motivo:resultado.motivo});
         DB.tareo[tareoKey] = {dni:trabajador.dniOriginal, nombre:trabajador.nombre, fecha:iso, fcCode:fcVal, marco, estado:'OBSERVACION_RRHH', motivo:resultado.motivo, proyecto:vinculo.proyecto, item:vinculo.item, cargo};
         obsRRHH++;
         // Si esta observación definitiva viene de una alerta de marcación preventiva que
@@ -1917,17 +1933,25 @@ function renderAlertasMarcacion(){
   main.innerHTML = `
     <h2 class="page-title"><i class="ti ti-bell" aria-hidden="true" style="font-size:19px;vertical-align:-3px;margin-right:6px;color:var(--primary);"></i>Alertas de marcación</h2>
     <div class="panel" id="marcas-carga-panel">
-      <div class="row" style="align-items:flex-end;">
-        <div class="field" style="flex:1.4;min-width:230px;">
-          <label>Listado de marcas (mediodía)</label>
-          <input type="file" id="file-marcas" accept=".xlsx,.xls" onchange="handleMarcasFile(this)">
+      <div class="split-panel">
+        <div class="split-col">
+          <h3 style="margin-top:0;">Cargar listado de marcas</h3>
+          <div class="field">
+            <label>Listado de marcas (mediodía)</label>
+            <input type="file" id="file-marcas" accept=".xlsx,.xls" onchange="handleMarcasFile(this)">
+          </div>
+          <p style="font-size:11.3px;color:var(--muted); margin:8px 0 0;">Solo se toman las filas de "Entrada" (distinto del reporte de la pestaña "Talana").</p>
+          <div id="marcas-msg" style="margin-top:8px;"></div>
         </div>
-        <div class="field"><label>Fecha a revisar</label><input type="date" id="am-fecha" value="${hoyIso}"></div>
-        <button class="btn" onclick="handleProcesarAlertas()">Detectar alertas</button>
+        <div class="split-divider"></div>
+        <div class="split-col">
+          <h3 style="margin-top:0;">Detectar alertas</h3>
+          <div class="field"><label>Fecha a revisar</label><input type="date" id="am-fecha" value="${hoyIso}"></div>
+          <button class="btn" onclick="handleProcesarAlertas()" style="margin-top:6px;">Detectar alertas</button>
+          <p style="font-size:11.3px;color:var(--muted); margin:8px 0 0;">No reemplaza la observación de RR.HH. (esa sale al procesar Tareo). No se reenvían alertas ya notificadas; las que ya tienen marcación pasan a "Resuelta".</p>
+          <div id="am-msg" style="margin-top:8px;"></div>
+        </div>
       </div>
-      <p style="font-size:11.3px;color:var(--muted); margin:8px 0 0;">Solo se toman las filas de "Entrada" del listado (distinto del reporte de la pestaña "Talana"). No reemplaza la observación definitiva de RR.HH., que se genera al procesar Tareo. Puedes repetir esto varias veces al día: no se reenvían alertas ya notificadas, y las que ya tienen marcación pasan a "Resuelta".</p>
-      <div id="marcas-msg" style="margin-top:8px;"></div>
-      <div id="am-msg" style="margin-top:8px;"></div>
     </div>
     <div class="panel" id="am-tabla-panel">
       ${renderTablaAlertas()}
@@ -2099,26 +2123,29 @@ function renderTareo(){
   main.innerHTML = `
     <h2 class="page-title">Procesar Tareo</h2>
     <div class="panel">
-      <h3>Procesar rango</h3>
-      <div class="row">
-        <div class="field"><label>Desde</label><input type="date" id="proc-ini"></div>
-        <div class="field"><label>Hasta</label><input type="date" id="proc-fin"></div>
-        <button class="btn" onclick="handleProcesar()">Procesar</button>
-      </div>
-      <div id="proc-msg" style="margin-top:10px;"></div>
-      <h3 style="margin-top:16px;">Filtros</h3>
-      <div class="row">
-        <div class="field"><label>DNI</label><input id="ft-dni" oninput="applyTareoFilter()"></div>
-        <div class="field"><label>Trabajador</label><input id="ft-nombre" oninput="applyTareoFilter()"></div>
-        <div class="field"><label>Estado</label>
-          <select id="ft-estado" onchange="applyTareoFilter()">
-            <option value="">Todos</option>
-            <option value="CORRECTO">Correcto</option>
-            <option value="REGULARIZADO">Regularizado</option>
-            <option value="OBSERVACION_RRHH">Observación RR.HH.</option>
-            <option value="ALERTA_ADMIN">Alerta Administración</option>
-            <option value="IGNORADO">Ignorado (código C)</option>
-          </select>
+      <div class="split-panel">
+        <div class="split-col">
+          <h3 style="margin-top:0;">Procesar rango</h3>
+          <div class="field"><label>Desde</label><input type="date" id="proc-ini"></div>
+          <div class="field"><label>Hasta</label><input type="date" id="proc-fin"></div>
+          <button class="btn" onclick="handleProcesar()" style="margin-top:6px;">Procesar</button>
+          <div id="proc-msg" style="margin-top:10px;"></div>
+        </div>
+        <div class="split-divider"></div>
+        <div class="split-col">
+          <h3 style="margin-top:0;">Filtros</h3>
+          <div class="field"><label>DNI</label><input id="ft-dni" oninput="applyTareoFilter()"></div>
+          <div class="field"><label>Trabajador</label><input id="ft-nombre" oninput="applyTareoFilter()"></div>
+          <div class="field"><label>Estado</label>
+            <select id="ft-estado" onchange="applyTareoFilter()">
+              <option value="">Todos</option>
+              <option value="CORRECTO">Correcto</option>
+              <option value="REGULARIZADO">Regularizado</option>
+              <option value="OBSERVACION_RRHH">Observación RR.HH.</option>
+              <option value="ALERTA_ADMIN">Alerta Administración</option>
+              <option value="IGNORADO">Ignorado (código C)</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -2189,16 +2216,21 @@ async function handleProcesar(){
     if(M365.siteUrl && graphToken){
       const spObs=await sincronizarObservacionesSharePoint();
       syncMsg=` Se sincronizaron ${spObs.creadas} nueva(s) y ${spObs.actualizadas} existente(s) con SharePoint.`;
-      if(res.nuevasObsRRHH && res.nuevasObsRRHH.length){
+      // Solo se notifica por las que SharePoint confirma como recién creadas — si otra persona
+      // (en otra computadora) ya procesó este mismo rango antes, esas observaciones ya existían
+      // ahí y no se vuelve a enviar correo por ellas, aunque en este navegador parecieran "nuevas".
+      const idsCreadasSet = new Set(spObs.idsCreadas||[]);
+      const nuevasConfirmadas = (res.nuevasObsRRHH||[]).filter(o=>idsCreadasSet.has(o.id));
+      if(nuevasConfirmadas.length){
         try{
           const correosRRHH = await obtenerCorreosPorRol('RRHH');
           if(correosRRHH.length){
             const linkObs = window.location.origin + window.location.pathname + '#observaciones';
-            const filas = res.nuevasObsRRHH.map(o=>`<li>${escapeHtml(o.dni)} ${escapeHtml(o.nombre)} (${escapeHtml(o.fecha)}): ${escapeHtml(o.motivo)}</li>`).join('');
-            const cuerpo = `<p>Se generaron ${res.nuevasObsRRHH.length} nueva(s) observación(es) pendiente(s) de regularizar:</p>`
+            const filas = nuevasConfirmadas.map(o=>`<li>${escapeHtml(o.dni)} ${escapeHtml(o.nombre)} (${escapeHtml(o.fecha)}): ${escapeHtml(o.motivo)}</li>`).join('');
+            const cuerpo = `<p>Se generaron ${nuevasConfirmadas.length} nueva(s) observación(es) pendiente(s) de regularizar:</p>`
               + `<ul>${filas}</ul>`
               + `<p><a href="${linkObs}">Ingresar a Control de Tareo para regularizarlas</a></p>`;
-            await graphEnviarCorreo(correosRRHH, `Control de Tareo: ${res.nuevasObsRRHH.length} observación(es) pendiente(s)`, cuerpo, true);
+            await graphEnviarCorreo(correosRRHH, `Control de Tareo: ${nuevasConfirmadas.length} observación(es) pendiente(s)`, cuerpo, true);
             syncMsg += ` Se notificó por correo a RR.HH. (${correosRRHH.join(', ')}).`;
           } else {
             syncMsg += ' No se encontró ningún correo con rol RRHH en la lista Roles; no se envió notificación.';
@@ -2207,6 +2239,8 @@ async function handleProcesar(){
           console.error('No se pudo enviar el correo a RR.HH.:', e);
           syncMsg += ' (No se pudo enviar el correo de notificación a RR.HH.; revisa la consola.)';
         }
+      } else if(res.nuevasObsRRHH && res.nuevasObsRRHH.length){
+        syncMsg += ' (Esas observaciones ya existían en SharePoint — probablemente ya procesadas antes desde otra computadora — así que no se reenvió el correo.)';
       }
     }
     msgEl.innerHTML = `<div class="msg-box ok">Procesado ${res.dias} día(s): ${res.correctos} correctos, ${res.obsRRHH} observaciones para RR.HH., ${res.alertasAdmin} alertas para Administración, ${res.ignorados} registros ignorados por vigencia${res.resueltasAutomaticas?`, ${res.resueltasAutomaticas} observación(es) resuelta(s) automáticamente por nueva marcación`:''}.${syncMsg}</div>`;
