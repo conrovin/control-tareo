@@ -1150,7 +1150,10 @@ function renderPadron(){
 function renderTablaPadronHtml(){
   const trabs = Object.values(DB.trabajadores).sort((a,b)=>a.nombre.localeCompare(b.nombre));
   return `
-      <h3>Trabajadores registrados (${trabs.length})</h3>
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;">Trabajadores registrados (${trabs.length})</h3>
+        <button class="btn small secondary" onclick="refrescarTablaPadron()"><i class="ti ti-refresh" aria-hidden="true" style="font-size:14px;vertical-align:-2px;margin-right:4px;"></i>Actualizar</button>
+      </div>
       <p style="font-size:12px;color:var(--muted)">El correo es necesario para las notificaciones del módulo "Alertas de marcación". Si tu archivo del padrón trae una columna de correo, se carga automáticamente; si algún trabajador no lo trae, puedes escribirlo aquí manualmente.</p>
       ${trabs.length===0 ? '<div class="empty">Aún no se ha cargado ningún padrón.</div>' : `
       <div class="table-wrap"><table>
@@ -1326,7 +1329,10 @@ function renderTablaTalanaHtml(){
   const registros = Object.values(DB.talana);
   const fechas = [...new Set(registros.map(r=>r.fecha))].sort();
   return `
-      <h3>Registros cargados (${registros.length})</h3>
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;">Registros cargados (${registros.length})</h3>
+        <button class="btn small secondary" onclick="refrescarTablaTalana()"><i class="ti ti-refresh" aria-hidden="true" style="font-size:14px;vertical-align:-2px;margin-right:4px;"></i>Actualizar</button>
+      </div>
       <p style="font-size:12px;color:var(--muted)">Rango de fechas cargadas: ${fechas.length? toDisplayDate(fechas[0])+' — '+toDisplayDate(fechas[fechas.length-1]) : '—'}</p>
       ${registros.length===0 ? '<div class="empty">Aún no se ha cargado ningún reporte de Talana.</div>' : `
       <div class="table-wrap"><table>
@@ -1464,7 +1470,10 @@ function renderFrancoplan(){
 function renderVersionesFrancoplanHtml(){
   const meses = Object.keys(DB.francoplan).sort();
   return `
-      <h3>Versiones cargadas</h3>
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;">Versiones cargadas</h3>
+        <button class="btn small secondary" onclick="refrescarVersionesFrancoplan()"><i class="ti ti-refresh" aria-hidden="true" style="font-size:14px;vertical-align:-2px;margin-right:4px;"></i>Actualizar</button>
+      </div>
       ${meses.length===0 ? '<div class="empty">Aún no se ha cargado ningún Francoplan.</div>' : meses.map(mk=>{
         const fp = DB.francoplan[mk];
         return `<div style="margin-bottom:14px;">
@@ -1907,21 +1916,18 @@ function renderAlertasMarcacion(){
   const main = document.getElementById('main');
   main.innerHTML = `
     <h2 class="page-title"><i class="ti ti-bell" aria-hidden="true" style="font-size:19px;vertical-align:-3px;margin-right:6px;color:var(--primary);"></i>Alertas de marcación</h2>
-    <p class="page-sub">Control preventivo durante el día: avisa a quien debía trabajar y aún no registra marcación en Talana. No reemplaza ni duplica la observación definitiva de RR.HH. — esta se genera solo cuando se ejecuta el procesamiento del tareo (pestaña "Tareo").</p>
     <div class="panel" id="marcas-carga-panel">
-      <h3>1. Cargar reporte de marcas del mediodía</h3>
-      <p style="font-size:12px;color:var(--muted); margin-top:-4px;">Este es el "listado de marcas" (una fila por marcación, con Entrada/Salida) — distinto del reporte que usas en la pestaña "Talana". Solo se toman en cuenta las filas marcadas como <b>Entrada</b>; las de Salida se ignoran para esta detección preventiva.</p>
-      <input type="file" id="file-marcas" accept=".xlsx,.xls" onchange="handleMarcasFile(this)">
-      <div id="marcas-msg" style="margin-top:12px;"></div>
-    </div>
-    <div class="panel">
-      <h3>2. Detectar alertas</h3>
-      <div class="row">
+      <div class="row" style="align-items:flex-end;">
+        <div class="field" style="flex:1.4;min-width:230px;">
+          <label>Listado de marcas (mediodía)</label>
+          <input type="file" id="file-marcas" accept=".xlsx,.xls" onchange="handleMarcasFile(this)">
+        </div>
         <div class="field"><label>Fecha a revisar</label><input type="date" id="am-fecha" value="${hoyIso}"></div>
         <button class="btn" onclick="handleProcesarAlertas()">Detectar alertas</button>
       </div>
-      <p style="font-size:11.8px;color:var(--muted); margin-top:8px;">Puedes repetir esto varias veces al día, cargando de nuevo el reporte de marcas cada vez: no se reenvían alertas ya notificadas, y las que ya tienen marcación pasan automáticamente a "Resuelta". (También puedes usar aquí un Talana ya cargado desde la pestaña "Talana", si lo prefieres.)</p>
-      <div id="am-msg" style="margin-top:12px;"></div>
+      <p style="font-size:11.3px;color:var(--muted); margin:8px 0 0;">Solo se toman las filas de "Entrada" del listado (distinto del reporte de la pestaña "Talana"). No reemplaza la observación definitiva de RR.HH., que se genera al procesar Tareo. Puedes repetir esto varias veces al día: no se reenvían alertas ya notificadas, y las que ya tienen marcación pasan a "Resuelta".</p>
+      <div id="marcas-msg" style="margin-top:8px;"></div>
+      <div id="am-msg" style="margin-top:8px;"></div>
     </div>
     <div class="panel" id="am-tabla-panel">
       ${renderTablaAlertas()}
@@ -2022,8 +2028,12 @@ function handleMarcasFile(input){
 }
 function renderTablaAlertas(){
   const registros = Object.values(DB.alertasMarcacion).sort((a,b)=> a.fecha<b.fecha?1:-1);
-  if(registros.length===0) return `<div class="empty">Aún no se ha detectado ninguna alerta de marcación.</div>`;
-  return `
+  const header = `<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h3 style="margin:0;">Alertas detectadas (${registros.length})</h3>
+      <button class="btn small secondary" onclick="actualizarPanelAlertas()"><i class="ti ti-refresh" aria-hidden="true" style="font-size:14px;vertical-align:-2px;margin-right:4px;"></i>Actualizar</button>
+    </div>`;
+  if(registros.length===0) return header+`<div class="empty">Aún no se ha detectado ninguna alerta de marcación.</div>`;
+  return header+`
     <div class="table-wrap"><table>
       <thead><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Estado</th><th>Notificación</th><th>Acciones</th></tr></thead>
       <tbody>
@@ -2045,12 +2055,15 @@ function renderTablaAlertas(){
           <td>${escapeHtml(a.nombre)}</td>
           <td>${badge}${a.observacionVinculada?' <span style="font-size:11px;color:var(--muted)">(ya generó observación RR.HH.)</span>':''}</td>
           <td style="white-space:normal;">${notif}</td>
-          <td>${a.estado==='PENDIENTE' ? `<button class="btn small secondary" onclick="escalarAlerta('${amKey}')">Marcar como escalada</button>` : '—'}</td>
-        </tr>`;
+          <td>${a.estado==='PENDIENTE' ? `<button class="btn small secondary" onclick="escalarAlerta('${amKey}')">Marcar como escalada</button>` : '—'}</td>        </tr>`;
       }).join('')}
       </tbody>
     </table></div>
   `;
+}
+function actualizarPanelAlertas(){
+  const panel = document.getElementById('am-tabla-panel');
+  if(panel) panel.innerHTML = renderTablaAlertas();
 }
 async function handleProcesarAlertas(){
   const fecha = document.getElementById('am-fecha').value;
@@ -2085,7 +2098,6 @@ function renderTareo(){
   const main = document.getElementById('main');
   main.innerHTML = `
     <h2 class="page-title">Procesar Tareo</h2>
-    <p class="page-sub">Ejecuta el motor de validación sobre un rango de fechas usando el padrón, francoplan y talana ya cargados.</p>
     <div class="panel">
       <h3>Procesar rango</h3>
       <div class="row">
@@ -2093,10 +2105,8 @@ function renderTareo(){
         <div class="field"><label>Hasta</label><input type="date" id="proc-fin"></div>
         <button class="btn" onclick="handleProcesar()">Procesar</button>
       </div>
-      <div id="proc-msg" style="margin-top:12px;"></div>
-    </div>
-    <div class="panel">
-      <h3>Filtros</h3>
+      <div id="proc-msg" style="margin-top:10px;"></div>
+      <h3 style="margin-top:16px;">Filtros</h3>
       <div class="row">
         <div class="field"><label>DNI</label><input id="ft-dni" oninput="applyTareoFilter()"></div>
         <div class="field"><label>Trabajador</label><input id="ft-nombre" oninput="applyTareoFilter()"></div>
@@ -2113,7 +2123,10 @@ function renderTareo(){
       </div>
     </div>
     <div class="panel">
-      <h3 id="tareo-count">Registros de tareo (${registros.length})</h3>
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <h3 id="tareo-count" style="margin:0;">Registros de tareo (${registros.length})</h3>
+        <button class="btn small secondary" onclick="refrescarTablaTareo()"><i class="ti ti-refresh" aria-hidden="true" style="font-size:14px;vertical-align:-2px;margin-right:4px;"></i>Actualizar</button>
+      </div>
       <div class="table-wrap"><table id="tareo-table">
         <thead><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Francoplan</th><th>Marcó Talana</th><th>Resultado</th><th>Estado</th></tr></thead>
         <tbody>${renderTareoRows(registros)}</tbody>
@@ -2207,10 +2220,56 @@ async function handleProcesar(){
 /* ==========================================================
    OBSERVACIONES
    ========================================================== */
+let obsSubTab = 'rrhh'; // 'rrhh' | 'admin'
+let obsFiltroEstado = 'TODAS'; // 'TODAS' | 'PENDIENTE' | 'REGULARIZADA'
+
 function renderObservaciones(){
-  const rrhh = DB.observaciones.filter(o=>o.tipo==='RRHH').sort((a,b)=> a.fecha<b.fecha?1:-1);
-  const admin = DB.observaciones.filter(o=>o.tipo==='ADMIN').sort((a,b)=> a.fecha<b.fecha?1:-1);
   const main = document.getElementById('main');
+  const puedeVerAdmin = SESSION.rol!=='RRHH';
+  if(!puedeVerAdmin) obsSubTab = 'rrhh';
+
+  main.innerHTML = `
+    <h2 class="page-title">Observaciones</h2>
+    <div class="row" style="margin-bottom:12px;">
+      <button class="btn ${obsSubTab==='rrhh' ? '' : 'secondary'}" onclick="goObsSubTab('rrhh')">RR.HH.</button>
+      ${puedeVerAdmin ? `<button class="btn ${obsSubTab==='admin' ? '' : 'secondary'}" onclick="goObsSubTab('admin')">Administración</button>` : ''}
+    </div>
+    <div id="obs-subtab-panel">${renderObsSubTabHtml()}</div>
+  `;
+}
+function goObsSubTab(tab){
+  obsSubTab = tab;
+  renderObservaciones();
+}
+function cambiarFiltroObsEstado(v){
+  obsFiltroEstado = v;
+  const panel = document.getElementById('obs-subtab-panel');
+  if(panel) panel.innerHTML = renderObsSubTabHtml();
+}
+function renderObsSubTabHtml(){
+  if(obsSubTab==='admin' && SESSION.rol!=='RRHH'){
+    const admin = DB.observaciones.filter(o=>o.tipo==='ADMIN').sort((a,b)=> a.fecha<b.fecha?1:-1);
+    return `
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;">Alertas para Administración (${admin.length})</h3>
+        <button class="btn small secondary" onclick="refrescarPanelObservaciones()"><i class="ti ti-refresh" aria-hidden="true" style="font-size:14px;vertical-align:-2px;margin-right:4px;"></i>Actualizar</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Motivo</th></tr></thead>
+        <tbody>${admin.length? admin.map(o=>`
+          <tr><td>${toDisplayDate(o.fecha)}</td><td><code class="mono">${escapeHtml(o.dni)}</code></td><td>${escapeHtml(o.nombre)}</td><td>${escapeHtml(o.motivo)}</td></tr>
+        `).join('') : `<tr><td colspan="4" class="empty">No hay alertas para Administración.</td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+  }
+
+  // --- RR.HH. ---
+  const todasRRHH = DB.observaciones.filter(o=>o.tipo==='RRHH');
+  let rrhh = todasRRHH.slice().sort((a,b)=> a.fecha<b.fecha?1:-1);
+  if(obsFiltroEstado==='PENDIENTE') rrhh = rrhh.filter(o=>o.estado==='PENDIENTE');
+  else if(obsFiltroEstado==='REGULARIZADA') rrhh = rrhh.filter(o=>o.estado==='REGULARIZADA'||o.estado==='RESUELTA_AUTOMATICA');
+  const pendientesCount = todasRRHH.filter(o=>o.estado==='PENDIENTE').length;
 
   const rrhhRows = rrhh.map(o=>`
     <tr>
@@ -2222,29 +2281,28 @@ function renderObservaciones(){
       <td>${o.estado==='PENDIENTE' ? `<button class="btn small" onclick='openModalReg(${JSON.stringify(o.id)})'>Regularizar</button>` : `<span style="font-size:11.5px;color:var(--muted)">${escapeHtml(o.usuarioReg)} · ${new Date(o.fechaHoraReg).toLocaleString('es-PE')}</span>`}</td>
     </tr>`).join('');
 
-  main.innerHTML = `
-    <h2 class="page-title">Observaciones</h2>
-    <p class="page-sub">${SESSION.rol==='RRHH' ? 'Revise y regularice las observaciones pendientes. No se administran archivos desde aquí.' : 'Observaciones para RR.HH. y alertas para Administración.'}</p>
-
+  return `
     <div class="panel">
-      <h3>Observaciones para RR.HH. (${rrhh.filter(o=>o.estado==='PENDIENTE').length} pendientes de ${rrhh.length})</h3>
+      <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;">
+        <h3 style="margin:0;">Observaciones para RR.HH. (${pendientesCount} pendientes de ${todasRRHH.length})</h3>
+        <div class="row" style="gap:8px;">
+          <select id="obs-filtro-estado" onchange="cambiarFiltroObsEstado(this.value)" style="width:auto;">
+            <option value="TODAS" ${obsFiltroEstado==='TODAS'?'selected':''}>Todas</option>
+            <option value="PENDIENTE" ${obsFiltroEstado==='PENDIENTE'?'selected':''}>Pendientes</option>
+            <option value="REGULARIZADA" ${obsFiltroEstado==='REGULARIZADA'?'selected':''}>Regularizadas</option>
+          </select>
+          <button class="btn small secondary" onclick="refrescarPanelObservaciones()"><i class="ti ti-refresh" aria-hidden="true" style="font-size:14px;vertical-align:-2px;margin-right:4px;"></i>Actualizar</button>
+        </div>
+      </div>
       <div class="table-wrap"><table>
         <thead><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Situación</th><th>Estado</th><th></th></tr></thead>
-        <tbody>${rrhh.length? rrhhRows : `<tr><td colspan="6" class="empty">No hay observaciones para RR.HH.</td></tr>`}</tbody>
+        <tbody>${rrhh.length? rrhhRows : `<tr><td colspan="6" class="empty">No hay observaciones con este filtro.</td></tr>`}</tbody>
       </table></div>
-    </div>
-
-    ${SESSION.rol!=='RRHH' ? `
-    <div class="panel">
-      <h3>Alertas para Administración (${admin.length})</h3>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Motivo</th></tr></thead>
-        <tbody>${admin.length? admin.map(o=>`
-          <tr><td>${toDisplayDate(o.fecha)}</td><td><code class="mono">${escapeHtml(o.dni)}</code></td><td>${escapeHtml(o.nombre)}</td><td>${escapeHtml(o.motivo)}</td></tr>
-        `).join('') : `<tr><td colspan="4" class="empty">No hay alertas para Administración.</td></tr>`}</tbody>
-      </table></div>
-    </div>` : ''}
-  `;
+    </div>`;
+}
+function refrescarPanelObservaciones(){
+  const panel = document.getElementById('obs-subtab-panel');
+  if(panel) panel.innerHTML = renderObsSubTabHtml();
 }
 
 // Códigos de justificación estándar (siempre disponibles)
