@@ -425,7 +425,12 @@ async function graphUpdateListItem(listTitle, itemId, fields){
 }
 async function graphFindListItem(listTitle, filterFields){
   const items=await graphListItems(listTitle,'*');
-  return items.find(x=>Object.entries(filterFields).every(([k,v])=>String((x.fields||{})[k]??'')===String(v??'')))||null;
+  // Se compara solo la parte de fecha (antes de la "T"): SharePoint devuelve las fechas con
+  // hora incluida (ej. "2026-09-01T00:00:00Z"), y sin esto la comparación nunca coincidía con
+  // el "2026-09-01" que maneja la app, haciendo que cada proceso creara un registro duplicado
+  // en vez de actualizar el existente.
+  const norm = v => String(v??'').split('T')[0];
+  return items.find(x=>Object.entries(filterFields).every(([k,v])=>norm((x.fields||{})[k])===norm(v)))||null;
 }
 async function sincronizarAlertasSharePoint(){
   if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0};
@@ -433,7 +438,7 @@ async function sincronizarAlertasSharePoint(){
   for(const a of Object.values(DB.alertasMarcacion||{})){
     try{
       const existing=await graphFindListItem('AlertasMarcacion',{Title:a.dni,Fecha:a.fecha});
-      const fields={Title:a.dni,Fecha:a.fecha,Estado:a.estado==='RESUELTA'?'Resuelta':a.estado==='ESCALADA'?'Escalada':'Pendiente',Canal:'Correo',FechaHoraNotificacion:a.fechaHoraNotificacion||null,FechaHoraResolucion:a.fechaHoraResolucion||null,ObservacionVinculada:!!a.observacionVinculada};
+      const fields={Title:a.dni,Fecha:fechaGraph(a.fecha),Estado:a.estado==='RESUELTA'?'Resuelta':a.estado==='ESCALADA'?'Escalada':'Pendiente',Canal:'Correo',FechaHoraNotificacion:a.fechaHoraNotificacion||null,FechaHoraResolucion:a.fechaHoraResolucion||null,ObservacionVinculada:!!a.observacionVinculada};
       if(existing){ await graphUpdateListItem('AlertasMarcacion',existing.id,fields); actualizadas++; }
       else { await graphCreateListItem('AlertasMarcacion',fields); creadas++; }
     }catch(e){ console.warn('No se pudo sincronizar alerta con SharePoint:',a,e); }
@@ -447,7 +452,7 @@ async function sincronizarObservacionesSharePoint(){
   for(const o of DB.observaciones||[]){
     try{
       const existing=await graphFindListItem('Observaciones',{Title:o.dni,Fecha:o.fecha,Tipo:o.tipo});
-      const fields={Title:o.dni,Fecha:o.fecha,Tipo:o.tipo,Motivo:o.motivo,Estado:(o.estado==='REGULARIZADA'||o.estado==='RESUELTA_AUTOMATICA')?'Regularizada':o.estado==='INFORMATIVA'?'Informativa':'Pendiente'};
+      const fields={Title:o.dni,Fecha:fechaGraph(o.fecha),Tipo:o.tipo,Motivo:o.motivo,Estado:(o.estado==='REGULARIZADA'||o.estado==='RESUELTA_AUTOMATICA')?'Regularizada':o.estado==='INFORMATIVA'?'Informativa':'Pendiente'};
       if(existing){ await graphUpdateListItem('Observaciones',existing.id,fields); actualizadas++; }
       else { await graphCreateListItem('Observaciones',fields); creadas++; idsCreadas.push(o.id); }
     }catch(e){ console.warn('No se pudo sincronizar observación con SharePoint:',o,e); }
@@ -498,8 +503,8 @@ async function sincronizarVinculosSharePoint(){
           const clave = t.dniOriginal+'|'+v.ingreso;
           const fields={
             Title: t.dniOriginal,
-            FechaIngreso: v.ingreso,
-            FechaCese: v.cese || null,
+            FechaIngreso: fechaGraph(v.ingreso),
+            FechaCese: fechaGraph(v.cese),
             Cargo: v.cargo || '',
             RegimenLaboral: v.regimen!=null ? String(v.regimen) : '',
             Proyecto: v.proyecto!=null ? String(v.proyecto) : '',
@@ -536,7 +541,7 @@ async function sincronizarTalanaSharePoint(registros){
     for(const reg of lista){
       try{
         const clave = reg.dniOriginal+'|'+reg.fecha;
-        const fields={ Title: reg.dniOriginal, Fecha: reg.fecha, Entrada: reg.entrada || null, Salida: reg.salida || null };
+        const fields={ Title: reg.dniOriginal, Fecha: fechaGraph(reg.fecha), Entrada: reg.entrada || null, Salida: reg.salida || null };
         const existing = porClave[clave];
         if(existing){ await graphUpdateListItem('Talana',existing.id,fields); actualizadas++; }
         else { await graphCreateListItem('Talana',fields); creadas++; }
@@ -566,7 +571,7 @@ async function sincronizarFrancoplanSharePoint(mesKey){
       for(const [fecha, codigo] of Object.entries(porFecha)){
         try{
           const clave = dniOriginal+'|'+fecha;
-          const fields = { Title: dniOriginal, Fecha: fecha, Codigo: String(codigo), MesVersion: mesKey, Revision: version.rev, FechaCarga: version.fechaCarga };
+          const fields = { Title: dniOriginal, Fecha: fechaGraph(fecha), Codigo: String(codigo), MesVersion: mesKey, Revision: version.rev, FechaCarga: version.fechaCarga };
           const existing = porClave[clave];
           if(existing){
             const ef = existing.fields||{};
@@ -807,6 +812,14 @@ function todayIso(){ return new Date().toISOString(); }
 function pad2(n){ return String(n).padStart(2,'0'); }
 function isoDate(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
 function toDisplayDate(iso){ const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; }
+function fechaGraph(fechaIso){
+  // Al escribir una fecha "pelada" (AAAA-MM-DD) en una columna de fecha de SharePoint,
+  // SharePoint la interpreta según la zona horaria configurada en el sitio, y eso puede
+  // correr el día al leerla de vuelta (ej.: guardas 01/09 y te devuelve 31/08 o 02/09).
+  // Anclarla al mediodía UTC evita ese corrimiento sin importar la zona horaria del sitio.
+  if(!fechaIso) return null;
+  return fechaIso+'T12:00:00Z';
+}
 function dniKey(v){
   if(v===undefined||v===null) return '';
   let s = String(v).trim();
@@ -2319,12 +2332,14 @@ function renderObsSubTabHtml(){
     <div class="panel">
       <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;">
         <h3 style="margin:0;">Observaciones para RR.HH. (${pendientesCount} pendientes de ${todasRRHH.length})</h3>
-        <div class="row" style="gap:8px;">
-          <select id="obs-filtro-estado" onchange="cambiarFiltroObsEstado(this.value)" style="width:auto;">
-            <option value="TODAS" ${obsFiltroEstado==='TODAS'?'selected':''}>Todas</option>
-            <option value="PENDIENTE" ${obsFiltroEstado==='PENDIENTE'?'selected':''}>Pendientes</option>
-            <option value="REGULARIZADA" ${obsFiltroEstado==='REGULARIZADA'?'selected':''}>Regularizadas</option>
-          </select>
+        <div class="row" style="gap:8px;align-items:center;">
+          <div class="field" style="margin:0;">
+            <select id="obs-filtro-estado" onchange="cambiarFiltroObsEstado(this.value)" style="width:auto;">
+              <option value="TODAS" ${obsFiltroEstado==='TODAS'?'selected':''}>Todas</option>
+              <option value="PENDIENTE" ${obsFiltroEstado==='PENDIENTE'?'selected':''}>Pendientes</option>
+              <option value="REGULARIZADA" ${obsFiltroEstado==='REGULARIZADA'?'selected':''}>Regularizadas</option>
+            </select>
+          </div>
           <button class="btn small secondary" onclick="refrescarPanelObservaciones()"><i class="ti ti-refresh" aria-hidden="true" style="font-size:14px;vertical-align:-2px;margin-right:4px;"></i>Actualizar</button>
         </div>
       </div>
