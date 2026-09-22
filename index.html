@@ -245,6 +245,9 @@
   }
   @keyframes spin{ to{ transform:rotate(360deg); } }
   .loading-text{ font-size:13px; font-weight:600; color:var(--ink); text-align:center; }
+  .progress-bar-wrap{background:var(--line); border-radius:100px; height:7px; overflow:hidden; margin-top:8px; width:100%;}
+  .progress-bar-fill{background:var(--primary); height:100%; border-radius:100px; transition:width .25s ease;}
+  .progress-label{font-size:11.5px; color:var(--muted); margin-top:5px; display:flex; justify-content:space-between;}
 
   /* resalta brevemente un panel recién actualizado, para confirmar visualmente al usuario */
   @keyframes flashUpdate{
@@ -261,6 +264,10 @@
   <div class="loading-card">
     <div class="spinner" aria-hidden="true"></div>
     <div class="loading-text" id="loading-text">Procesando…</div>
+    <div id="loading-progress" style="width:100%;display:none;">
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" id="loading-progress-fill" style="width:0%;"></div></div>
+      <div class="progress-label"><span id="loading-progress-count">0 de 0</span><span id="loading-progress-pct">0%</span></div>
+    </div>
     <button type="button" onclick="hideLoading()" style="background:none;border:none;color:var(--muted);font-size:11.5px;cursor:pointer;text-decoration:underline;padding:0;">Cerrar (si se quedó pegado)</button>
   </div>
 </div>
@@ -459,29 +466,32 @@ async function sincronizarObservacionesSharePoint(){
   }
   return {creadas,actualizadas,idsCreadas};
 }
-async function sincronizarTrabajadoresSharePoint(){
+async function sincronizarTrabajadoresSharePoint(onProgress){
   if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0};
-  let creadas=0, actualizadas=0;
+  let creadas=0, actualizadas=0, hechos=0;
   try{
     // Se trae la lista completa UNA sola vez (el padrón puede tener muchos trabajadores)
     // y se arma un mapa por DNI, en vez de buscar uno por uno como en Alertas/Observaciones.
     const existentes = await graphListItems('Trabajadores','Title,Nombre');
     const porDni = {};
     existentes.forEach(x=>{ const f=x.fields||{}; if(f.Title) porDni[String(f.Title).trim()] = x; });
+    const total = Object.keys(DB.trabajadores||{}).length;
     for(const t of Object.values(DB.trabajadores||{})){
       try{
         const ultimo = (t.vinculos && t.vinculos.length) ? t.vinculos[t.vinculos.length-1] : null;
         const codigo = ultimo && ultimo.codigo!=null ? String(ultimo.codigo) : '';
-        const fields={Title:t.dniOriginal, Nombre:t.nombre, CodigoHapiqa:codigo, Correo:t.correo||''};
+        const fields={Title:t.dniOriginal, Nombre:t.nombre, CodigoHapiqa:codigo, Correo:t.correo||'', NombrePila:t.nombrePila||''};
         const existing = porDni[t.dniOriginal];
         if(existing){ await graphUpdateListItem('Trabajadores',existing.id,fields); actualizadas++; }
         else { await graphCreateListItem('Trabajadores',fields); creadas++; }
       }catch(e){ console.warn('No se pudo sincronizar trabajador con SharePoint:',t,e); }
+      hechos++;
+      if(onProgress && (hechos%5===0 || hechos===total)) onProgress(hechos, total);
     }
   }catch(e){ console.warn('No se pudo leer la lista Trabajadores de SharePoint:',e); }
   return {creadas,actualizadas};
 }
-async function sincronizarVinculosSharePoint(){
+async function sincronizarVinculosSharePoint(onProgress){
   if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0};
   let creadas=0, actualizadas=0;
   try{
@@ -496,35 +506,38 @@ async function sincronizarVinculosSharePoint(){
         porClave[clave] = x;
       }
     });
-    for(const t of Object.values(DB.trabajadores||{})){
-      for(const v of (t.vinculos||[])){
-        if(!v.ingreso) continue; // sin fecha de ingreso no se puede identificar el vínculo de forma única
-        try{
-          const clave = t.dniOriginal+'|'+v.ingreso;
-          const fields={
-            Title: t.dniOriginal,
-            FechaIngreso: fechaGraph(v.ingreso),
-            FechaCese: fechaGraph(v.cese),
-            Cargo: v.cargo || '',
-            RegimenLaboral: v.regimen!=null ? String(v.regimen) : '',
-            Proyecto: v.proyecto!=null ? String(v.proyecto) : '',
-            Item: v.item!=null ? String(v.item) : '',
-            Estado: v.estado!=null ? String(v.estado) : '',
-            CentroCosto: v.centroCosto!=null ? String(v.centroCosto) : ''
-          };
-          const existing = porClave[clave];
-          if(existing){ await graphUpdateListItem('Vinculos',existing.id,fields); actualizadas++; }
-          else { await graphCreateListItem('Vinculos',fields); creadas++; }
-        }catch(e){ console.warn('No se pudo sincronizar vínculo con SharePoint:',t.dniOriginal,v,e); }
-      }
+    const todos = Object.values(DB.trabajadores||{}).flatMap(t=>(t.vinculos||[]).map(v=>({t,v})));
+    const total = todos.length;
+    let hechos = 0;
+    for(const {t,v} of todos){
+      if(!v.ingreso){ hechos++; continue; } // sin fecha de ingreso no se puede identificar el vínculo de forma única
+      try{
+        const clave = t.dniOriginal+'|'+v.ingreso;
+        const fields={
+          Title: t.dniOriginal,
+          FechaIngreso: fechaGraph(v.ingreso),
+          FechaCese: fechaGraph(v.cese),
+          Cargo: v.cargo || '',
+          RegimenLaboral: v.regimen!=null ? String(v.regimen) : '',
+          Proyecto: v.proyecto!=null ? String(v.proyecto) : '',
+          Item: v.item!=null ? String(v.item) : '',
+          Estado: v.estado!=null ? String(v.estado) : '',
+          CentroCosto: v.centroCosto!=null ? String(v.centroCosto) : ''
+        };
+        const existing = porClave[clave];
+        if(existing){ await graphUpdateListItem('Vinculos',existing.id,fields); actualizadas++; }
+        else { await graphCreateListItem('Vinculos',fields); creadas++; }
+      }catch(e){ console.warn('No se pudo sincronizar vínculo con SharePoint:',t.dniOriginal,v,e); }
+      hechos++;
+      if(onProgress && (hechos%5===0 || hechos===total)) onProgress(hechos, total);
     }
   }catch(e){ console.warn('No se pudo leer la lista Vinculos de SharePoint:',e); }
   return {creadas,actualizadas};
 }
-async function sincronizarTalanaSharePoint(registros){
+async function sincronizarTalanaSharePoint(registros, onProgress){
   if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0};
   const lista = registros || Object.values(DB.talana||{});
-  let creadas=0, actualizadas=0;
+  let creadas=0, actualizadas=0, hechos=0;
   try{
     // Misma idea que Trabajadores/Vinculos: se trae la lista completa una sola vez
     // (Talana puede traer muchas filas) y se identifica cada registro por DNI+Fecha,
@@ -546,11 +559,13 @@ async function sincronizarTalanaSharePoint(registros){
         if(existing){ await graphUpdateListItem('Talana',existing.id,fields); actualizadas++; }
         else { await graphCreateListItem('Talana',fields); creadas++; }
       }catch(e){ console.warn('No se pudo sincronizar registro de Talana con SharePoint:',reg,e); }
+      hechos++;
+      if(onProgress && (hechos%5===0 || hechos===lista.length)) onProgress(hechos, lista.length);
     }
   }catch(e){ console.warn('No se pudo leer la lista Talana de SharePoint:',e); }
   return {creadas,actualizadas};
 }
-async function sincronizarFrancoplanSharePoint(mesKey){
+async function sincronizarFrancoplanSharePoint(mesKey, onProgress){
   if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0,sinCambios:0};
   const fp = DB.francoplan[mesKey];
   if(!fp || !fp.versions.length) return {creadas:0,actualizadas:0,sinCambios:0};
@@ -566,6 +581,10 @@ async function sincronizarFrancoplanSharePoint(mesKey){
         porClave[clave] = x;
       }
     });
+    // Se cuenta el total real de días×trabajadores a procesar, para poder mostrar un
+    // avance verdadero (no simulado) mientras se sincroniza.
+    const totalFilas = Object.values(version.data||{}).reduce((acc,porFecha)=>acc+Object.keys(porFecha).length, 0);
+    let hechos = 0;
     for(const [key, porFecha] of Object.entries(version.data||{})){
       const dniOriginal = (DB.trabajadores[key] && DB.trabajadores[key].dniOriginal) || key;
       for(const [fecha, codigo] of Object.entries(porFecha)){
@@ -576,14 +595,15 @@ async function sincronizarFrancoplanSharePoint(mesKey){
           if(existing){
             const ef = existing.fields||{};
             const sinCambio = String(ef.Codigo??'')===fields.Codigo && String(ef.Revision??'')===fields.Revision;
-            if(sinCambio){ sinCambios++; continue; }
-            await graphUpdateListItem('Francoplan',existing.id,fields);
-            actualizadas++;
+            if(sinCambio){ sinCambios++; }
+            else { await graphUpdateListItem('Francoplan',existing.id,fields); actualizadas++; }
           } else {
             await graphCreateListItem('Francoplan',fields);
             creadas++;
           }
         }catch(e){ console.warn('No se pudo sincronizar Francoplan con SharePoint:',dniOriginal,fecha,e); }
+        hechos++;
+        if(onProgress && (hechos%5===0 || hechos===totalFilas)) onProgress(hechos, totalFilas);
       }
     }
   }catch(e){ console.warn('No se pudo leer la lista Francoplan de SharePoint:',e); }
@@ -632,10 +652,10 @@ async function loginMicrosoft(){
 
     const role=await cargarRolesDesdeSharePoint();
     SESSION={user:role.email,rol:role.rol};
-    if(Object.keys(DB.trabajadores).length===0){
-      msg.innerHTML='<div class="msg-box loading"><i class="ti ti-loader-2" aria-hidden="true"></i> Primer ingreso en este navegador: trayendo la información ya cargada desde SharePoint…</div>';
-      await sincronizarDesdeSharePoint();
-    }
+    msg.innerHTML = htmlBarraProgreso('Trayendo información desde SharePoint…', 0, 6);
+    await sincronizarDesdeSharePoint((completados, total, etiqueta)=>{
+      msg.innerHTML = htmlBarraProgreso(`Trayendo ${etiqueta}…`, completados, total);
+    });
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').style.display='grid';
     document.getElementById('who-user').textContent=role.email;
@@ -661,9 +681,11 @@ async function restaurarSesionM365(){
 
     const role=await cargarRolesDesdeSharePoint();
     SESSION={user:role.email,rol:role.rol};
-    if(Object.keys(DB.trabajadores).length===0){
-      await sincronizarDesdeSharePoint();
-    }
+    const msg=document.getElementById('login-msg');
+    if(msg) msg.innerHTML = htmlBarraProgreso('Trayendo información desde SharePoint…', 0, 6);
+    await sincronizarDesdeSharePoint((completados, total, etiqueta)=>{
+      if(msg) msg.innerHTML = htmlBarraProgreso(`Trayendo ${etiqueta}…`, completados, total);
+    });
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').style.display='grid';
     document.getElementById('who-user').textContent=role.email;
@@ -674,16 +696,19 @@ async function restaurarSesionM365(){
     console.warn('No se pudo restaurar la sesión Microsoft 365 automáticamente:',e);
   }
 }
-async function sincronizarDesdeSharePoint(){
+async function sincronizarDesdeSharePoint(onProgress){
   if(!M365.siteUrl || !graphToken) return {ok:false, error:'No hay sesión de Microsoft 365 activa.'};
+  const total = 6;
+  let completados = 0;
+  const marcar = (etiqueta) => { completados++; if(onProgress) onProgress(completados, total, etiqueta); };
   try{
     const [trabRows, vincRows, talanaRows, fpRows, obsRows, alertRows] = await Promise.all([
-      graphListItems('Trabajadores','Title,Nombre,CodigoHapiqa,Correo'),
-      graphListItems('Vinculos','Title,FechaIngreso,FechaCese,Cargo,RegimenLaboral,Proyecto,Item,Estado,CentroCosto'),
-      graphListItems('Talana','Title,Fecha,Entrada,Salida'),
-      graphListItems('Francoplan','Title,Fecha,Codigo,MesVersion,Revision,FechaCarga'),
-      graphListItems('Observaciones','Title,Fecha,Tipo,Motivo,Estado'),
-      graphListItems('AlertasMarcacion','Title,Fecha,Estado,Canal,FechaHoraNotificacion,FechaHoraResolucion,ObservacionVinculada'),
+      graphListItems('Trabajadores','Title,Nombre,CodigoHapiqa,Correo,NombrePila').then(r=>{ marcar('Trabajadores'); return r; }),
+      graphListItems('Vinculos','Title,FechaIngreso,FechaCese,Cargo,RegimenLaboral,Proyecto,Item,Estado,CentroCosto').then(r=>{ marcar('Vínculos'); return r; }),
+      graphListItems('Talana','Title,Fecha,Entrada,Salida').then(r=>{ marcar('Talana'); return r; }),
+      graphListItems('Francoplan','Title,Fecha,Codigo,MesVersion,Revision,FechaCarga').then(r=>{ marcar('Francoplan'); return r; }),
+      graphListItems('Observaciones','Title,Fecha,Tipo,Motivo,Estado').then(r=>{ marcar('Observaciones'); return r; }),
+      graphListItems('AlertasMarcacion','Title,Fecha,Estado,Canal,FechaHoraNotificacion,FechaHoraResolucion,ObservacionVinculada').then(r=>{ marcar('Alertas de marcación'); return r; }),
     ]);
 
     // --- Trabajadores + Vinculos (se reconstruye la estructura anidada que usa la app) ---
@@ -692,14 +717,14 @@ async function sincronizarDesdeSharePoint(){
       const f=x.fields||{};
       const dni=String(f.Title||'').trim();
       if(!dni) return;
-      nuevoTrabajadores[dniKey(dni)] = {dniOriginal:dni, nombre:f.Nombre||'', correo:f.Correo||null, vinculos:[]};
+      nuevoTrabajadores[dniKey(dni)] = {dniOriginal:dni, nombre:f.Nombre||'', nombrePila:f.NombrePila||null, correo:f.Correo||null, vinculos:[]};
     });
     vincRows.forEach(x=>{
       const f=x.fields||{};
       const dni=String(f.Title||'').trim();
       if(!dni) return;
       const key=dniKey(dni);
-      if(!nuevoTrabajadores[key]) nuevoTrabajadores[key] = {dniOriginal:dni, nombre:'', correo:null, vinculos:[]};
+      if(!nuevoTrabajadores[key]) nuevoTrabajadores[key] = {dniOriginal:dni, nombre:'', nombrePila:null, correo:null, vinculos:[]};
       nuevoTrabajadores[key].vinculos.push({
         ingreso: f.FechaIngreso ? String(f.FechaIngreso).split('T')[0] : null,
         cese: f.FechaCese ? String(f.FechaCese).split('T')[0] : null,
@@ -899,7 +924,9 @@ let loadingTimeoutId = null;
 function showLoading(texto){
   const ov = document.getElementById('loading-overlay');
   const txt = document.getElementById('loading-text');
+  const prog = document.getElementById('loading-progress');
   if(txt) txt.textContent = texto || 'Procesando…';
+  if(prog) prog.style.display = 'none'; // se muestra solo si se llama a updateLoadingProgress
   if(ov) ov.classList.add('show');
   // Salvedad de seguridad: si por cualquier motivo no controlado nunca se llama a
   // hideLoading(), esto evita que el aviso quede pegado para siempre en pantalla.
@@ -909,10 +936,35 @@ function showLoading(texto){
     hideLoading();
   }, 45000);
 }
+function updateLoadingProgress(completados, total, texto){
+  const txt = document.getElementById('loading-text');
+  const prog = document.getElementById('loading-progress');
+  const fill = document.getElementById('loading-progress-fill');
+  const count = document.getElementById('loading-progress-count');
+  const pct = document.getElementById('loading-progress-pct');
+  if(texto && txt) txt.textContent = texto;
+  if(prog) prog.style.display = 'block';
+  const p = total>0 ? Math.round((completados/total)*100) : 0;
+  if(fill) fill.style.width = p+'%';
+  if(count) count.textContent = `${completados} de ${total}`;
+  if(pct) pct.textContent = p+'%';
+  // Cada actualización de progreso real reinicia la salvaguarda de 45s, para que una
+  // sincronización larga pero que SÍ está avanzando no se cierre sola a mitad de camino.
+  clearTimeout(loadingTimeoutId);
+  loadingTimeoutId = setTimeout(()=>{ console.warn('El aviso de carga se cerró automáticamente por seguridad.'); hideLoading(); }, 45000);
+}
 function hideLoading(){
   clearTimeout(loadingTimeoutId);
   const ov = document.getElementById('loading-overlay');
   if(ov) ov.classList.remove('show');
+}
+function htmlBarraProgreso(etiqueta, completados, total){
+  const pct = total>0 ? Math.round((completados/total)*100) : 0;
+  return `<div class="msg-box loading">
+    <div style="display:flex;align-items:center;gap:6px;"><i class="ti ti-loader-2" aria-hidden="true"></i> ${escapeHtml(etiqueta)}</div>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${pct}%;"></div></div>
+    <div class="progress-label"><span>${completados} de ${total}</span><span>${pct}%</span></div>
+  </div>`;
 }
 // resalta brevemente un panel para confirmar visualmente que la información se actualizó
 function flashPanel(idOrEl){
@@ -1078,8 +1130,10 @@ async function handleSincronizarDesdeSharePoint(){
     msgEl.innerHTML = `<div class="msg-box err">No hay sesión de Microsoft 365 activa.</div>`;
     return;
   }
-  msgEl.innerHTML = `<div class="msg-box loading"><i class="ti ti-loader-2" aria-hidden="true"></i> Trayendo información desde SharePoint, puede tardar unos segundos…</div>`;
-  const r = await sincronizarDesdeSharePoint();
+  msgEl.innerHTML = htmlBarraProgreso('Trayendo información desde SharePoint…', 0, 6);
+  const r = await sincronizarDesdeSharePoint((completados, total, etiqueta)=>{
+    msgEl.innerHTML = htmlBarraProgreso(`Trayendo ${etiqueta}…`, completados, total);
+  });
   if(!r.ok){
     msgEl.innerHTML = `<div class="msg-box err">No se pudo sincronizar: ${escapeHtml(r.error||'error desconocido')}</div>`;
     return;
@@ -1313,8 +1367,12 @@ function handlePadronFile(input){
       saveDB();
       let syncMsg='';
       if(M365.siteUrl && graphToken){
-        const sp = await sincronizarTrabajadoresSharePoint();
-        const sv = await sincronizarVinculosSharePoint();
+        const sp = await sincronizarTrabajadoresSharePoint((completados,total)=>{
+          msgEl.innerHTML = htmlBarraProgreso(`Sincronizando trabajadores con SharePoint…`, completados, total);
+        });
+        const sv = await sincronizarVinculosSharePoint((completados,total)=>{
+          msgEl.innerHTML = htmlBarraProgreso(`Sincronizando vínculos con SharePoint…`, completados, total);
+        });
         syncMsg = ` Se sincronizaron ${sp.creadas} trabajador(es) nuevo(s) y ${sp.actualizadas} actualizado(s), y ${sv.creadas} vínculo(s) nuevo(s) y ${sv.actualizadas} actualizado(s) en SharePoint.`;
       }
       msgEl.innerHTML = `<div class="msg-box ok">Padrón procesado: ${nuevos} trabajadores nuevos, ${actualizados} actualizados, ${reingresos} reingresos detectados, ${ceses} ceses nuevos.${syncMsg}</div>`;
@@ -1436,7 +1494,9 @@ function handleTalanaFile(input){
       saveDB();
       let syncMsg='';
       if(M365.siteUrl && graphToken){
-        const st = await sincronizarTalanaSharePoint(tocados);
+        const st = await sincronizarTalanaSharePoint(tocados, (completados,total)=>{
+          msgEl.innerHTML = htmlBarraProgreso(`Sincronizando Talana con SharePoint…`, completados, total);
+        });
         syncMsg = ` Se sincronizaron ${st.creadas} fila(s) nueva(s) y ${st.actualizadas} actualizada(s) en SharePoint.`;
       }
       msgEl.innerHTML = `<div class="msg-box ok">Talana procesado: ${procesados} filas (${nuevos} nuevas, ${actualizados} actualizadas). La combinación DNI+Fecha nunca se duplica.${syncMsg}</div>`;
@@ -1646,8 +1706,10 @@ async function confirmFrancoplanImport(){
   let syncMsg='';
   if(M365.siteUrl && graphToken){
     msgEl.innerHTML = `<div class="msg-box ok">Francoplan de ${mesKey} importado: ${filas} trabajadores. Sincronizando con SharePoint, puede tardar unos minutos según la cantidad de trabajadores…</div>`;
-    showLoading('Sincronizando con SharePoint…');
-    const sf = await sincronizarFrancoplanSharePoint(mesKey);
+    showLoading('Sincronizando Francoplan con SharePoint…');
+    const sf = await sincronizarFrancoplanSharePoint(mesKey, (completados,total)=>{
+      updateLoadingProgress(completados, total, `Sincronizando Francoplan con SharePoint (${completados} de ${total})…`);
+    });
     syncMsg = ` Sincronizado con SharePoint: ${sf.creadas} fila(s) nueva(s), ${sf.actualizadas} actualizada(s), ${sf.sinCambios} sin cambios.`;
   }
   msgEl.innerHTML = `<div class="msg-box ok">Francoplan de ${mesKey} importado: ${filas} trabajadores.${syncMsg} ${codigosDesconocidos.size? '<br>⚠ Códigos no reconocidos encontrados: '+[...codigosDesconocidos].map(escapeHtml).join(', ')+'. Se marcarán como alerta al procesar.':''}</div>`;
@@ -1920,10 +1982,9 @@ async function enviarNotificacionAlerta(a){
 }
 
 function mensajeAlertaMarcacion(nombre){
-  const primerNombre = (nombre||'').trim().split(/\s+/)[0] || '';
   return {
     asunto: 'Alerta de marcación de asistencia',
-    cuerpo: `Hola ${primerNombre},\n\nDurante la revisión de asistencia se ha detectado que actualmente no figura una marcación correspondiente al día de hoy.\n\nPor favor, verifica tu marcación y regularízala según corresponda.\n\nSi ya realizaste tu marcación, puedes ignorar este mensaje.\n\nSaludos.\nCONSORCIO ROVELLA INMAC`
+    cuerpo: `Estimado colaborador:\n\nDurante la revisión de asistencia, se ha detectado que actualmente no figura una marcación correspondiente al día de hoy.\n\nPor favor, verifica tu marcación y, de ser necesario, regularízala según corresponda.\n\nSi ya realizaste tu marcación, puedes ignorar este mensaje.\n\nSaludos,\nCONSORCIO ROVELLA INMAC`
   };
 }
 function mailtoAlertaMarcacion(a){
