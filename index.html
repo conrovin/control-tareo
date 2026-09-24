@@ -198,6 +198,7 @@
   .table-wrap{ animation:msgFadeIn .3s ease-out; }
   .msg-box.ok{background:var(--success-bg); color:#0F7A46;}
   .msg-box.err{background:var(--danger-bg); color:#B93327;}
+  .msg-box.warn{background:var(--warn-bg); color:#8A5A00;}
   .msg-box.info{background:var(--primary-bg); color:var(--primary-deep);}
 
   .modal-bg{
@@ -467,8 +468,8 @@ async function sincronizarObservacionesSharePoint(){
   return {creadas,actualizadas,idsCreadas};
 }
 async function sincronizarTrabajadoresSharePoint(onProgress){
-  if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0};
-  let creadas=0, actualizadas=0, hechos=0;
+  if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0,erroresFilas:0,noConectado:true};
+  let creadas=0, actualizadas=0, hechos=0, erroresFilas=0;
   try{
     // Se trae la lista completa UNA sola vez (el padrón puede tener muchos trabajadores)
     // y se arma un mapa por DNI, en vez de buscar uno por uno como en Alertas/Observaciones.
@@ -484,16 +485,16 @@ async function sincronizarTrabajadoresSharePoint(onProgress){
         const existing = porDni[t.dniOriginal];
         if(existing){ await graphUpdateListItem('Trabajadores',existing.id,fields); actualizadas++; }
         else { await graphCreateListItem('Trabajadores',fields); creadas++; }
-      }catch(e){ console.warn('No se pudo sincronizar trabajador con SharePoint:',t,e); }
+      }catch(e){ console.warn('No se pudo sincronizar trabajador con SharePoint:',t,e); erroresFilas++; }
       hechos++;
       if(onProgress && (hechos%5===0 || hechos===total)) onProgress(hechos, total);
     }
-  }catch(e){ console.warn('No se pudo leer la lista Trabajadores de SharePoint:',e); }
-  return {creadas,actualizadas};
+  }catch(e){ console.warn('No se pudo leer la lista Trabajadores de SharePoint:',e); return {creadas,actualizadas,erroresFilas,errorGeneral:e.message||String(e)}; }
+  return {creadas,actualizadas,erroresFilas};
 }
 async function sincronizarVinculosSharePoint(onProgress){
-  if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0};
-  let creadas=0, actualizadas=0;
+  if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0,erroresFilas:0,noConectado:true};
+  let creadas=0, actualizadas=0, erroresFilas=0;
   try{
     // Un mismo trabajador (DNI) puede tener varios vínculos (reingresos), así que la
     // clave para identificar cada uno sin duplicar es DNI + fecha de ingreso.
@@ -527,17 +528,17 @@ async function sincronizarVinculosSharePoint(onProgress){
         const existing = porClave[clave];
         if(existing){ await graphUpdateListItem('Vinculos',existing.id,fields); actualizadas++; }
         else { await graphCreateListItem('Vinculos',fields); creadas++; }
-      }catch(e){ console.warn('No se pudo sincronizar vínculo con SharePoint:',t.dniOriginal,v,e); }
+      }catch(e){ console.warn('No se pudo sincronizar vínculo con SharePoint:',t.dniOriginal,v,e); erroresFilas++; }
       hechos++;
       if(onProgress && (hechos%5===0 || hechos===total)) onProgress(hechos, total);
     }
-  }catch(e){ console.warn('No se pudo leer la lista Vinculos de SharePoint:',e); }
-  return {creadas,actualizadas};
+  }catch(e){ console.warn('No se pudo leer la lista Vinculos de SharePoint:',e); return {creadas,actualizadas,erroresFilas,errorGeneral:e.message||String(e)}; }
+  return {creadas,actualizadas,erroresFilas};
 }
 async function sincronizarTalanaSharePoint(registros, onProgress){
-  if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0};
+  if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0,erroresFilas:0,noConectado:true};
   const lista = registros || Object.values(DB.talana||{});
-  let creadas=0, actualizadas=0, hechos=0;
+  let creadas=0, actualizadas=0, hechos=0, erroresFilas=0;
   try{
     // Misma idea que Trabajadores/Vinculos: se trae la lista completa una sola vez
     // (Talana puede traer muchas filas) y se identifica cada registro por DNI+Fecha,
@@ -558,19 +559,22 @@ async function sincronizarTalanaSharePoint(registros, onProgress){
         const existing = porClave[clave];
         if(existing){ await graphUpdateListItem('Talana',existing.id,fields); actualizadas++; }
         else { await graphCreateListItem('Talana',fields); creadas++; }
-      }catch(e){ console.warn('No se pudo sincronizar registro de Talana con SharePoint:',reg,e); }
+      }catch(e){ console.warn('No se pudo sincronizar registro de Talana con SharePoint:',reg,e); erroresFilas++; }
       hechos++;
       if(onProgress && (hechos%5===0 || hechos===lista.length)) onProgress(hechos, lista.length);
     }
-  }catch(e){ console.warn('No se pudo leer la lista Talana de SharePoint:',e); }
-  return {creadas,actualizadas};
+  }catch(e){
+    console.warn('No se pudo leer la lista Talana de SharePoint:',e);
+    return {creadas,actualizadas,erroresFilas,errorGeneral:e.message||String(e)};
+  }
+  return {creadas,actualizadas,erroresFilas};
 }
 async function sincronizarFrancoplanSharePoint(mesKey, onProgress){
-  if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0,sinCambios:0};
+  if(!M365.siteUrl || !graphToken) return {creadas:0,actualizadas:0,sinCambios:0,erroresFilas:0,noConectado:true};
   const fp = DB.francoplan[mesKey];
   if(!fp || !fp.versions.length) return {creadas:0,actualizadas:0,sinCambios:0};
   const version = fp.versions[fp.versions.length-1]; // solo se sincroniza la versión vigente
-  let creadas=0, actualizadas=0, sinCambios=0;
+  let creadas=0, actualizadas=0, sinCambios=0, erroresFilas=0;
   try{
     const existentes = await graphListItems('Francoplan','Title,Fecha,Codigo,MesVersion,Revision,FechaCarga');
     const porClave = {};
@@ -601,13 +605,13 @@ async function sincronizarFrancoplanSharePoint(mesKey, onProgress){
             await graphCreateListItem('Francoplan',fields);
             creadas++;
           }
-        }catch(e){ console.warn('No se pudo sincronizar Francoplan con SharePoint:',dniOriginal,fecha,e); }
+        }catch(e){ console.warn('No se pudo sincronizar Francoplan con SharePoint:',dniOriginal,fecha,e); erroresFilas++; }
         hechos++;
         if(onProgress && (hechos%5===0 || hechos===totalFilas)) onProgress(hechos, totalFilas);
       }
     }
-  }catch(e){ console.warn('No se pudo leer la lista Francoplan de SharePoint:',e); }
-  return {creadas,actualizadas,sinCambios};
+  }catch(e){ console.warn('No se pudo leer la lista Francoplan de SharePoint:',e); return {creadas,actualizadas,sinCambios,erroresFilas,errorGeneral:e.message||String(e)}; }
+  return {creadas,actualizadas,sinCambios,erroresFilas};
 }
 async function cargarRolesDesdeSharePoint(){
   const email=(await graph('/me')).mail || (await graph('/me')).userPrincipalName;
@@ -1365,7 +1369,7 @@ function handlePadronFile(input){
       saveDB();
       DB.historial.cargas.push({tipo:'PADRON', fecha: todayIso(), usuario:SESSION.user, detalle:`${file.name} — ${nuevos} nuevos, ${actualizados} actualizados, ${reingresos} reingresos`});
       saveDB();
-      let syncMsg='';
+      let syncMsg='', syncWarn='';
       if(M365.siteUrl && graphToken){
         const sp = await sincronizarTrabajadoresSharePoint((completados,total)=>{
           msgEl.innerHTML = htmlBarraProgreso(`Sincronizando trabajadores con SharePoint…`, completados, total);
@@ -1373,9 +1377,18 @@ function handlePadronFile(input){
         const sv = await sincronizarVinculosSharePoint((completados,total)=>{
           msgEl.innerHTML = htmlBarraProgreso(`Sincronizando vínculos con SharePoint…`, completados, total);
         });
-        syncMsg = ` Se sincronizaron ${sp.creadas} trabajador(es) nuevo(s) y ${sp.actualizadas} actualizado(s), y ${sv.creadas} vínculo(s) nuevo(s) y ${sv.actualizadas} actualizado(s) en SharePoint.`;
+        const totalErrores = (sp.erroresFilas||0)+(sv.erroresFilas||0);
+        if(sp.errorGeneral || sv.errorGeneral){
+          syncWarn = `<div class="msg-box warn" style="margin-top:8px;"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Esto se guardó SOLO en este navegador — no se pudo conectar con SharePoint (${escapeHtml(sp.errorGeneral||sv.errorGeneral)}). Vuelve a intentarlo; si persiste, avisa a quien mantiene el sistema.</div>`;
+        } else if(totalErrores>0){
+          syncWarn = `<div class="msg-box warn" style="margin-top:8px;"><i class="ti ti-alert-triangle" aria-hidden="true"></i> ${totalErrores} registro(s) NO se pudieron sincronizar con SharePoint (quedaron solo en este navegador). Vuelve a cargar este mismo archivo para reintentar.</div>`;
+        } else {
+          syncMsg = ` Se sincronizaron ${sp.creadas} trabajador(es) nuevo(s) y ${sp.actualizadas} actualizado(s), y ${sv.creadas} vínculo(s) nuevo(s) y ${sv.actualizadas} actualizado(s) en SharePoint.`;
+        }
+      } else {
+        syncWarn = `<div class="msg-box warn" style="margin-top:8px;"><i class="ti ti-alert-triangle" aria-hidden="true"></i> No hay sesión de Microsoft 365 activa: esto se guardó SOLO en este navegador. Otros usuarios (y otras computadoras) NO van a ver este padrón hasta que cierres sesión, vuelvas a entrar con Microsoft 365, y cargues este archivo de nuevo.</div>`;
       }
-      msgEl.innerHTML = `<div class="msg-box ok">Padrón procesado: ${nuevos} trabajadores nuevos, ${actualizados} actualizados, ${reingresos} reingresos detectados, ${ceses} ceses nuevos.${syncMsg}</div>`;
+      msgEl.innerHTML = `<div class="msg-box ok">Padrón procesado: ${nuevos} trabajadores nuevos, ${actualizados} actualizados, ${reingresos} reingresos detectados, ${ceses} ceses nuevos.${syncMsg}</div>${syncWarn}`;
       refrescarTablaPadron();
       flashPanel('padron-tabla-panel');
     }catch(err){
@@ -1492,14 +1505,22 @@ function handleTalanaFile(input){
       saveDB();
       DB.historial.cargas.push({tipo:'TALANA', fecha: todayIso(), usuario:SESSION.user, detalle:`${file.name} — ${procesados} filas (${nuevos} nuevas, ${actualizados} actualizadas)`});
       saveDB();
-      let syncMsg='';
+      let syncMsg='', syncWarn='';
       if(M365.siteUrl && graphToken){
         const st = await sincronizarTalanaSharePoint(tocados, (completados,total)=>{
           msgEl.innerHTML = htmlBarraProgreso(`Sincronizando Talana con SharePoint…`, completados, total);
         });
-        syncMsg = ` Se sincronizaron ${st.creadas} fila(s) nueva(s) y ${st.actualizadas} actualizada(s) en SharePoint.`;
+        if(st.errorGeneral){
+          syncWarn = `<div class="msg-box warn" style="margin-top:8px;"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Esto se guardó SOLO en este navegador — no se pudo conectar con SharePoint (${escapeHtml(st.errorGeneral)}). Vuelve a intentarlo; si persiste, avisa a quien mantiene el sistema.</div>`;
+        } else if(st.erroresFilas>0){
+          syncWarn = `<div class="msg-box warn" style="margin-top:8px;"><i class="ti ti-alert-triangle" aria-hidden="true"></i> ${st.erroresFilas} de ${tocados.length} fila(s) NO se pudieron sincronizar con SharePoint (quedaron solo en este navegador). Vuelve a cargar este mismo archivo para reintentar esas filas.</div>`;
+        } else {
+          syncMsg = ` Se sincronizaron ${st.creadas} fila(s) nueva(s) y ${st.actualizadas} actualizada(s) en SharePoint.`;
+        }
+      } else {
+        syncWarn = `<div class="msg-box warn" style="margin-top:8px;"><i class="ti ti-alert-triangle" aria-hidden="true"></i> No hay sesión de Microsoft 365 activa: esto se guardó SOLO en este navegador. Otros usuarios (y otras computadoras) NO van a ver esta información hasta que cierres sesión, vuelvas a entrar con Microsoft 365, y cargues este archivo de nuevo.</div>`;
       }
-      msgEl.innerHTML = `<div class="msg-box ok">Talana procesado: ${procesados} filas (${nuevos} nuevas, ${actualizados} actualizadas). La combinación DNI+Fecha nunca se duplica.${syncMsg}</div>`;
+      msgEl.innerHTML = `<div class="msg-box ok">Talana procesado: ${procesados} filas (${nuevos} nuevas, ${actualizados} actualizadas). La combinación DNI+Fecha nunca se duplica.${syncMsg}</div>${syncWarn}`;
       refrescarTablaTalana();
       flashPanel('talana-tabla-panel');
     }catch(err){
@@ -1703,16 +1724,24 @@ async function confirmFrancoplanImport(){
   saveDB();
   pendingFPParse = null;
   const msgEl = document.getElementById('fp-msg');
-  let syncMsg='';
+  let syncMsg='', syncWarn='';
   if(M365.siteUrl && graphToken){
     msgEl.innerHTML = `<div class="msg-box ok">Francoplan de ${mesKey} importado: ${filas} trabajadores. Sincronizando con SharePoint, puede tardar unos minutos según la cantidad de trabajadores…</div>`;
     showLoading('Sincronizando Francoplan con SharePoint…');
     const sf = await sincronizarFrancoplanSharePoint(mesKey, (completados,total)=>{
       updateLoadingProgress(completados, total, `Sincronizando Francoplan con SharePoint (${completados} de ${total})…`);
     });
-    syncMsg = ` Sincronizado con SharePoint: ${sf.creadas} fila(s) nueva(s), ${sf.actualizadas} actualizada(s), ${sf.sinCambios} sin cambios.`;
+    if(sf.errorGeneral){
+      syncWarn = `<div class="msg-box warn" style="margin-top:8px;"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Esto se guardó SOLO en este navegador — no se pudo conectar con SharePoint (${escapeHtml(sf.errorGeneral)}). Vuelve a intentarlo.</div>`;
+    } else if(sf.erroresFilas>0){
+      syncWarn = `<div class="msg-box warn" style="margin-top:8px;"><i class="ti ti-alert-triangle" aria-hidden="true"></i> ${sf.erroresFilas} fila(s) NO se pudieron sincronizar con SharePoint (quedaron solo en este navegador). Vuelve a cargar este mismo archivo para reintentar.</div>`;
+    } else {
+      syncMsg = ` Sincronizado con SharePoint: ${sf.creadas} fila(s) nueva(s), ${sf.actualizadas} actualizada(s), ${sf.sinCambios} sin cambios.`;
+    }
+  } else {
+    syncWarn = `<div class="msg-box warn" style="margin-top:8px;"><i class="ti ti-alert-triangle" aria-hidden="true"></i> No hay sesión de Microsoft 365 activa: esto se guardó SOLO en este navegador. Vuelve a entrar con Microsoft 365 y carga este archivo de nuevo.</div>`;
   }
-  msgEl.innerHTML = `<div class="msg-box ok">Francoplan de ${mesKey} importado: ${filas} trabajadores.${syncMsg} ${codigosDesconocidos.size? '<br>⚠ Códigos no reconocidos encontrados: '+[...codigosDesconocidos].map(escapeHtml).join(', ')+'. Se marcarán como alerta al procesar.':''}</div>`;
+  msgEl.innerHTML = `<div class="msg-box ok">Francoplan de ${mesKey} importado: ${filas} trabajadores.${syncMsg} ${codigosDesconocidos.size? '<br>⚠ Códigos no reconocidos encontrados: '+[...codigosDesconocidos].map(escapeHtml).join(', ')+'. Se marcarán como alerta al procesar.':''}</div>${syncWarn}`;
   refrescarVersionesFrancoplan();
   flashPanel('fp-versiones-panel');
   }catch(err){
